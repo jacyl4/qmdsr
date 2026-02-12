@@ -25,9 +25,8 @@ sudo cp deploy/qmdsr.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable qmdsr
 
-echo "=== Installing CLI wrappers ==="
-sudo cp scripts/qmds scripts/qmdsb scripts/qmdsd /usr/local/bin/
-sudo chmod 755 /usr/local/bin/qmds /usr/local/bin/qmdsb /usr/local/bin/qmdsd
+echo "=== Cleaning legacy CLI wrappers ==="
+sudo rm -f /usr/local/bin/qmds /usr/local/bin/qmdsb /usr/local/bin/qmdsd
 
 echo "=== Starting service ==="
 sudo systemctl restart qmdsr
