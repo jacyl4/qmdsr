@@ -11,15 +11,15 @@ import (
 )
 
 type Config struct {
-	QMD        QMDConfig        `yaml:"qmd"`
-	Server     ServerConfig     `yaml:"server"`
+	QMD         QMDConfig       `yaml:"qmd"`
+	Server      ServerConfig    `yaml:"server"`
 	Collections []CollectionCfg `yaml:"collections"`
-	Search     SearchConfig     `yaml:"search"`
-	Cache      CacheConfig      `yaml:"cache"`
-	Scheduler  SchedulerConfig  `yaml:"scheduler"`
-	Guardian   GuardianConfig   `yaml:"guardian"`
-	Logging    LoggingConfig    `yaml:"logging"`
-	Runtime    RuntimeConfig    `yaml:"runtime"`
+	Search      SearchConfig    `yaml:"search"`
+	Cache       CacheConfig     `yaml:"cache"`
+	Scheduler   SchedulerConfig `yaml:"scheduler"`
+	Guardian    GuardianConfig  `yaml:"guardian"`
+	Logging     LoggingConfig   `yaml:"logging"`
+	Runtime     RuntimeConfig   `yaml:"runtime"`
 }
 
 type QMDConfig struct {
@@ -70,9 +70,9 @@ type SchedulerConfig struct {
 }
 
 type GuardianConfig struct {
-	CheckInterval  time.Duration `yaml:"check_interval"`
-	Timeout        time.Duration `yaml:"timeout"`
-	RestartMaxRetries int        `yaml:"restart_max_retries"`
+	CheckInterval     time.Duration `yaml:"check_interval"`
+	Timeout           time.Duration `yaml:"timeout"`
+	RestartMaxRetries int           `yaml:"restart_max_retries"`
 }
 
 type LoggingConfig struct {
@@ -83,13 +83,18 @@ type LoggingConfig struct {
 }
 
 type RuntimeConfig struct {
-	LowResourceMode    bool          `yaml:"low_resource_mode"`
-	AllowCPUDeepQuery  bool          `yaml:"allow_cpu_deep_query"`
-	SmartRouting       bool          `yaml:"smart_routing"`
-	CPUDeepMinWords    int           `yaml:"cpu_deep_min_words"`
-	CPUDeepMinChars    int           `yaml:"cpu_deep_min_chars"`
-	QueryMaxConcurrency int          `yaml:"query_max_concurrency"`
-	QueryTimeout       time.Duration `yaml:"query_timeout"`
+	LowResourceMode        bool          `yaml:"low_resource_mode"`
+	AllowCPUDeepQuery      bool          `yaml:"allow_cpu_deep_query"`
+	SmartRouting           bool          `yaml:"smart_routing"`
+	CPUDeepMinWords        int           `yaml:"cpu_deep_min_words"`
+	CPUDeepMinChars        int           `yaml:"cpu_deep_min_chars"`
+	CPUDeepMaxWords        int           `yaml:"cpu_deep_max_words"`
+	CPUDeepMaxChars        int           `yaml:"cpu_deep_max_chars"`
+	CPUDeepMaxAbstractCues int           `yaml:"cpu_deep_max_abstract_cues"`
+	QueryMaxConcurrency    int           `yaml:"query_max_concurrency"`
+	QueryTimeout           time.Duration `yaml:"query_timeout"`
+	DeepFailTimeout        time.Duration `yaml:"deep_fail_timeout"`
+	DeepNegativeTTL        time.Duration `yaml:"deep_negative_ttl"`
 }
 
 func Load(path string) (*Config, error) {
@@ -182,11 +187,19 @@ func (c *Config) normalize() {
 	}
 	queryTimeoutUnset := c.Runtime.QueryTimeout == 0
 	queryConcurrencyUnset := c.Runtime.QueryMaxConcurrency == 0
+	deepFailTimeoutUnset := c.Runtime.DeepFailTimeout == 0
+	deepNegativeTTLUnset := c.Runtime.DeepNegativeTTL == 0
 	if queryTimeoutUnset {
 		c.Runtime.QueryTimeout = 120 * time.Second
 	}
 	if queryConcurrencyUnset {
 		c.Runtime.QueryMaxConcurrency = 2
+	}
+	if deepFailTimeoutUnset {
+		c.Runtime.DeepFailTimeout = 15 * time.Second
+	}
+	if deepNegativeTTLUnset {
+		c.Runtime.DeepNegativeTTL = 10 * time.Minute
 	}
 	if c.Runtime.LowResourceMode && c.Runtime.AllowCPUDeepQuery {
 		c.Runtime.SmartRouting = true
@@ -196,11 +209,26 @@ func (c *Config) normalize() {
 		if c.Runtime.CPUDeepMinChars == 0 {
 			c.Runtime.CPUDeepMinChars = 24
 		}
+		if c.Runtime.CPUDeepMaxWords == 0 {
+			c.Runtime.CPUDeepMaxWords = 28
+		}
+		if c.Runtime.CPUDeepMaxChars == 0 {
+			c.Runtime.CPUDeepMaxChars = 160
+		}
+		if c.Runtime.CPUDeepMaxAbstractCues == 0 {
+			c.Runtime.CPUDeepMaxAbstractCues = 2
+		}
 		if queryConcurrencyUnset {
 			c.Runtime.QueryMaxConcurrency = 1
 		}
 		if queryTimeoutUnset {
 			c.Runtime.QueryTimeout = 45 * time.Second
+		}
+		if deepFailTimeoutUnset {
+			c.Runtime.DeepFailTimeout = 12 * time.Second
+		}
+		if deepNegativeTTLUnset {
+			c.Runtime.DeepNegativeTTL = 15 * time.Minute
 		}
 	}
 }

@@ -12,11 +12,13 @@ type SearchResult struct {
 }
 
 type SearchMeta struct {
-	ModeUsed             string   `json:"mode_used"`
-	CollectionsSearched  []string `json:"collections_searched"`
-	FallbackTriggered    bool     `json:"fallback_triggered"`
-	CacheHit             bool     `json:"cache_hit"`
-	LatencyMs            int64    `json:"latency_ms"`
+	ModeUsed            string   `json:"mode_used"`
+	CollectionsSearched []string `json:"collections_searched"`
+	FallbackTriggered   bool     `json:"fallback_triggered"`
+	CacheHit            bool     `json:"cache_hit"`
+	Degraded            bool     `json:"degraded"`
+	DegradeReason       string   `json:"degrade_reason,omitempty"`
+	LatencyMs           int64    `json:"latency_ms"`
 }
 
 type SearchResponse struct {

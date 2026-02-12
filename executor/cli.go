@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"qmdsr/config"
@@ -19,11 +21,11 @@ import (
 const defaultTimeout = 30 * time.Second
 
 type CLIExecutor struct {
-	bin         string
-	caps        Capabilities
-	log         *slog.Logger
-	lowResource bool
-	cpuDeep     bool
+	bin          string
+	caps         Capabilities
+	log          *slog.Logger
+	lowResource  bool
+	cpuDeep      bool
 	queryTimeout time.Duration
 	queryTokens  chan struct{}
 }
@@ -530,7 +532,8 @@ func (e *CLIExecutor) Version(ctx context.Context) (string, error) {
 }
 
 func (e *CLIExecutor) run(ctx context.Context, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, e.bin, args...)
+	cmd := exec.Command(e.bin, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if e.shouldDisableVulkan(args) {
 		cmd.Env = append(
 			os.Environ(),
@@ -543,11 +546,58 @@ func (e *CLIExecutor) run(ctx context.Context, args ...string) (string, error) {
 	cmd.Stderr = &stderr
 
 	e.log.Debug("exec qmd", "args", args)
-	if err := cmd.Run(); err != nil {
-		e.log.Debug("exec qmd failed", "args", args, "stderr", stderr.String(), "err", err)
+	if err := cmd.Start(); err != nil {
+		return stdout.String(), fmt.Errorf("qmd %s: %w", strings.Join(args, " "), err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- cmd.Wait()
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			e.log.Debug("exec qmd failed", "args", args, "stderr", stderr.String(), "err", err)
+			return stdout.String(), fmt.Errorf("qmd %s: %w: %s", strings.Join(args, " "), err, stderr.String())
+		}
+		return stdout.String(), nil
+	case <-ctx.Done():
+		e.killProcessGroup(cmd.Process)
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			e.log.Warn("qmd process did not exit promptly after timeout kill", "args", args)
+		}
+		err := ctx.Err()
+		if err == nil {
+			err = context.DeadlineExceeded
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			e.log.Warn("qmd command timed out and was killed", "args", args)
+		}
 		return stdout.String(), fmt.Errorf("qmd %s: %w: %s", strings.Join(args, " "), err, stderr.String())
 	}
-	return stdout.String(), nil
+}
+
+func (e *CLIExecutor) killProcessGroup(proc *os.Process) {
+	if proc == nil {
+		return
+	}
+	pid := proc.Pid
+	if pid <= 0 {
+		return
+	}
+	pgid, err := syscall.Getpgid(pid)
+	if err == nil && pgid > 0 {
+		// Negative PGID kills the whole process group.
+		if killErr := syscall.Kill(-pgid, syscall.SIGKILL); killErr == nil {
+			return
+		}
+	}
+	if err := proc.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+		e.log.Debug("failed to kill qmd process", "pid", pid, "err", err)
+	}
 }
 
 func (e *CLIExecutor) shouldDisableVulkan(args []string) bool {

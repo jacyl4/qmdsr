@@ -13,23 +13,27 @@ import (
 )
 
 type Entry struct {
-	Results      []model.SearchResult
-	IndexVersion string
-	CreatedAt    time.Time
-	Query        string
-	Mode         string
-	Collection   string
+	Results           []model.SearchResult
+	IndexVersion      string
+	CreatedAt         time.Time
+	Query             string
+	Mode              string
+	Collection        string
+	Collections       []string
+	FallbackTriggered bool
+	Degraded          bool
+	DegradeReason     string
 }
 
 type Cache struct {
-	mu          sync.RWMutex
-	items       map[string]*list.Element
-	order       *list.List
-	maxEntries  int
-	ttl         time.Duration
+	mu           sync.RWMutex
+	items        map[string]*list.Element
+	order        *list.List
+	maxEntries   int
+	ttl          time.Duration
 	versionAware bool
-	version     string
-	enabled     bool
+	version      string
+	enabled      bool
 
 	hits   int64
 	misses int64

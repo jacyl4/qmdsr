@@ -76,7 +76,12 @@ runtime:
   low_resource_mode: true
   allow_cpu_deep_query: true
   smart_routing: true
-  cpu_deep_min_words: 10
-  cpu_deep_min_chars: 24
+  cpu_deep_min_words: 12
+  cpu_deep_min_chars: 30
+  cpu_deep_max_words: 28
+  cpu_deep_max_chars: 160
+  cpu_deep_max_abstract_cues: 2
   query_max_concurrency: 1
-  query_timeout: 45s
+  query_timeout: 30s
+  deep_fail_timeout: 12s
+  deep_negative_ttl: 15m
