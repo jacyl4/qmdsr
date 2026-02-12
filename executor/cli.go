@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -16,20 +17,27 @@ import (
 )
 
 const defaultTimeout = 30 * time.Second
-const queryTimeout = 120 * time.Second
 
 type CLIExecutor struct {
 	bin         string
 	caps        Capabilities
 	log         *slog.Logger
 	lowResource bool
+	cpuDeep     bool
+	queryTimeout time.Duration
+	queryTokens  chan struct{}
 }
 
 func NewCLI(cfg *config.Config, logger *slog.Logger) (*CLIExecutor, error) {
 	e := &CLIExecutor{
-		bin:         cfg.QMD.Bin,
-		log:         logger,
-		lowResource: cfg.Runtime.LowResourceMode,
+		bin:          cfg.QMD.Bin,
+		log:          logger,
+		lowResource:  cfg.Runtime.LowResourceMode,
+		cpuDeep:      cfg.Runtime.AllowCPUDeepQuery,
+		queryTimeout: cfg.Runtime.QueryTimeout,
+	}
+	if cfg.Runtime.QueryMaxConcurrency > 0 {
+		e.queryTokens = make(chan struct{}, cfg.Runtime.QueryMaxConcurrency)
 	}
 	if err := e.probe(context.Background()); err != nil {
 		return nil, err
@@ -67,11 +75,23 @@ func (e *CLIExecutor) probe(ctx context.Context) error {
 	}
 
 	if e.lowResource {
-		if e.caps.Vector || e.caps.DeepQuery {
-			e.log.Info("low_resource_mode enabled, disabling vector/deep-query capabilities")
+		if e.caps.Vector {
+			e.log.Info("low_resource_mode enabled, disabling vector capability")
 		}
 		e.caps.Vector = false
-		e.caps.DeepQuery = false
+
+		if e.cpuDeep {
+			if e.caps.DeepQuery {
+				e.log.Info("low_resource_mode enabled, deep-query kept with CPU fallback")
+			} else {
+				e.log.Warn("allow_cpu_deep_query enabled, but qmd query capability not detected")
+			}
+		} else {
+			if e.caps.DeepQuery {
+				e.log.Info("low_resource_mode enabled, disabling deep-query capability")
+			}
+			e.caps.DeepQuery = false
+		}
 	}
 
 	e.log.Info("qmd capabilities",
@@ -117,9 +137,19 @@ func (e *CLIExecutor) Query(ctx context.Context, query string, opts SearchOpts) 
 	if !e.caps.DeepQuery {
 		return nil, fmt.Errorf("query not available")
 	}
+
+	if err := e.acquireQuerySlot(ctx); err != nil {
+		return nil, err
+	}
+	defer e.releaseQuerySlot()
+
 	args := []string{"query", query, "--json"}
 	args = appendSearchArgs(args, opts)
-	return e.execSearch(ctx, args, queryTimeout)
+	timeout := e.queryTimeout
+	if timeout <= 0 {
+		timeout = 120 * time.Second
+	}
+	return e.execSearch(ctx, args, timeout)
 }
 
 func (e *CLIExecutor) Get(ctx context.Context, docRef string, opts GetOpts) (string, error) {
@@ -501,6 +531,13 @@ func (e *CLIExecutor) Version(ctx context.Context) (string, error) {
 
 func (e *CLIExecutor) run(ctx context.Context, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, e.bin, args...)
+	if e.shouldDisableVulkan(args) {
+		cmd.Env = append(
+			os.Environ(),
+			"NODE_LLAMA_CPP_GPU=off",
+			"GGML_VK_DISABLE=1",
+		)
+	}
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -513,6 +550,18 @@ func (e *CLIExecutor) run(ctx context.Context, args ...string) (string, error) {
 	return stdout.String(), nil
 }
 
+func (e *CLIExecutor) shouldDisableVulkan(args []string) bool {
+	if !e.lowResource || !e.cpuDeep || len(args) == 0 {
+		return false
+	}
+	switch args[0] {
+	case "query", "embed", "vsearch", "mcp":
+		return true
+	default:
+		return false
+	}
+}
+
 func (e *CLIExecutor) execSearch(ctx context.Context, args []string, timeout time.Duration) ([]model.SearchResult, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -522,11 +571,37 @@ func (e *CLIExecutor) execSearch(ctx context.Context, args []string, timeout tim
 		return nil, err
 	}
 
-	var results []model.SearchResult
-	if err := json.Unmarshal([]byte(out), &results); err != nil {
+	results, err := parseSearchOutput(out)
+	if err != nil {
 		return nil, fmt.Errorf("parse search results: %w (output: %.200s)", err, out)
 	}
 	return results, nil
+}
+
+func parseSearchOutput(out string) ([]model.SearchResult, error) {
+	trimmed := strings.TrimSpace(out)
+	if trimmed == "" {
+		return []model.SearchResult{}, nil
+	}
+
+	var results []model.SearchResult
+	if err := json.Unmarshal([]byte(trimmed), &results); err == nil {
+		return results, nil
+	}
+
+	// qmd may output this plain text for empty result sets.
+	if strings.Contains(trimmed, "No results found.") {
+		return []model.SearchResult{}, nil
+	}
+
+	// Some qmd versions prepend warnings before the JSON payload.
+	if idx := strings.Index(trimmed, "["); idx > 0 {
+		if err := json.Unmarshal([]byte(trimmed[idx:]), &results); err == nil {
+			return results, nil
+		}
+	}
+
+	return nil, fmt.Errorf("invalid search output")
 }
 
 func appendSearchArgs(args []string, opts SearchOpts) []string {
@@ -543,4 +618,26 @@ func appendSearchArgs(args []string, opts SearchOpts) []string {
 		args = append(args, "--full")
 	}
 	return args
+}
+
+func (e *CLIExecutor) acquireQuerySlot(ctx context.Context) error {
+	if e.queryTokens == nil {
+		return nil
+	}
+	select {
+	case e.queryTokens <- struct{}{}:
+		return nil
+	case <-ctx.Done():
+		return fmt.Errorf("query queue busy: %w", ctx.Err())
+	}
+}
+
+func (e *CLIExecutor) releaseQuerySlot() {
+	if e.queryTokens == nil {
+		return
+	}
+	select {
+	case <-e.queryTokens:
+	default:
+	}
 }

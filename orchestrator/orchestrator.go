@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"qmdsr/cache"
 	"qmdsr/config"
@@ -123,8 +124,9 @@ func (o *Orchestrator) Search(ctx context.Context, params SearchParams) (*Search
 }
 
 func (o *Orchestrator) resolveMode(requested string, query string) router.Mode {
+	isAuto := requested == "" || requested == "auto"
 	var mode router.Mode
-	if requested != "" && requested != "auto" {
+	if !isAuto {
 		mode = router.Mode(requested)
 	} else {
 		mode = router.DetectMode(query, o.exec.HasCapability("vector"), o.exec.HasCapability("deep_query"))
@@ -136,6 +138,10 @@ func (o *Orchestrator) resolveMode(requested string, query string) router.Mode {
 			o.log.Debug("query mode unavailable, fallback to search")
 			return router.ModeSearch
 		}
+		if isAuto && !o.allowAutoDeepQuery(query) {
+			o.log.Debug("auto query downgraded to search in smart_routing mode")
+			return router.ModeSearch
+		}
 	case router.ModeVSearch:
 		if !o.exec.HasCapability("vector") {
 			o.log.Debug("vsearch mode unavailable, fallback to search")
@@ -144,6 +150,73 @@ func (o *Orchestrator) resolveMode(requested string, query string) router.Mode {
 	}
 
 	return mode
+}
+
+func (o *Orchestrator) allowAutoDeepQuery(query string) bool {
+	if !(o.cfg.Runtime.LowResourceMode && o.cfg.Runtime.AllowCPUDeepQuery && o.cfg.Runtime.SmartRouting) {
+		return true
+	}
+
+	q := strings.TrimSpace(query)
+	if q == "" {
+		return false
+	}
+
+	if runeLen(q) < o.cfg.Runtime.CPUDeepMinChars {
+		return false
+	}
+
+	words := countWords(q)
+	if words >= o.cfg.Runtime.CPUDeepMinWords {
+		return true
+	}
+
+	if hasQuestionCue(q) {
+		return words >= 4 || countCJK(q) >= 6
+	}
+
+	return false
+}
+
+func runeLen(s string) int {
+	return len([]rune(s))
+}
+
+func countWords(s string) int {
+	asciiWords := len(strings.Fields(s))
+	cjkWords := countCJK(s)
+	if cjkWords > asciiWords {
+		return cjkWords
+	}
+	return asciiWords
+}
+
+func countCJK(s string) int {
+	n := 0
+	for _, r := range s {
+		if isCJK(r) {
+			n++
+		}
+	}
+	return n
+}
+
+func hasQuestionCue(s string) bool {
+	lower := strings.ToLower(s)
+	cues := []string{
+		"如何", "怎么", "怎样", "什么", "为什么", "为何", "是否", "能不能", "可以", "应该",
+		"?", "？", "how ", "what ", "why ", "when ", "where ", "which ", "should ",
+	}
+	for _, cue := range cues {
+		if strings.Contains(lower, cue) {
+			return true
+		}
+	}
+	return false
+}
+
+func isCJK(r rune) bool {
+	return unicode.Is(unicode.Han, r)
 }
 
 func (o *Orchestrator) searchSingleCollection(ctx context.Context, params SearchParams, mode router.Mode, cacheKey string, start time.Time) (*SearchResult, error) {
@@ -208,18 +281,20 @@ func (o *Orchestrator) searchWithFallback(ctx context.Context, params SearchPara
 	}
 
 	if mode == router.ModeSearch && len(filtered) == 0 && o.exec.HasCapability("deep_query") {
-		o.log.Info("BM25 returned no results, escalating to query mode")
-		mode = router.ModeQuery
-		allResults = nil
-		for _, col := range tier1 {
-			results, err := o.execSearch(ctx, mode, params.Query, col.Name, params)
-			if err != nil {
-				continue
+		if o.allowAutoDeepQuery(params.Query) {
+			o.log.Info("BM25 returned no results, escalating to query mode")
+			mode = router.ModeQuery
+			allResults = nil
+			for _, col := range tier1 {
+				results, err := o.execSearch(ctx, mode, params.Query, col.Name, params)
+				if err != nil {
+					continue
+				}
+				results = o.filterExclude(results, &col)
+				allResults = append(allResults, results...)
 			}
-			results = o.filterExclude(results, &col)
-			allResults = append(allResults, results...)
+			filtered = o.filterMinScore(allResults, params.MinScore)
 		}
-		filtered = o.filterMinScore(allResults, params.MinScore)
 	}
 
 	filtered = dedup(filtered)

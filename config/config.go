@@ -83,7 +83,13 @@ type LoggingConfig struct {
 }
 
 type RuntimeConfig struct {
-	LowResourceMode bool `yaml:"low_resource_mode"`
+	LowResourceMode    bool          `yaml:"low_resource_mode"`
+	AllowCPUDeepQuery  bool          `yaml:"allow_cpu_deep_query"`
+	SmartRouting       bool          `yaml:"smart_routing"`
+	CPUDeepMinWords    int           `yaml:"cpu_deep_min_words"`
+	CPUDeepMinChars    int           `yaml:"cpu_deep_min_chars"`
+	QueryMaxConcurrency int          `yaml:"query_max_concurrency"`
+	QueryTimeout       time.Duration `yaml:"query_timeout"`
 }
 
 func Load(path string) (*Config, error) {
@@ -173,6 +179,29 @@ func (c *Config) normalize() {
 	}
 	if c.Logging.Level == "" {
 		c.Logging.Level = "info"
+	}
+	queryTimeoutUnset := c.Runtime.QueryTimeout == 0
+	queryConcurrencyUnset := c.Runtime.QueryMaxConcurrency == 0
+	if queryTimeoutUnset {
+		c.Runtime.QueryTimeout = 120 * time.Second
+	}
+	if queryConcurrencyUnset {
+		c.Runtime.QueryMaxConcurrency = 2
+	}
+	if c.Runtime.LowResourceMode && c.Runtime.AllowCPUDeepQuery {
+		c.Runtime.SmartRouting = true
+		if c.Runtime.CPUDeepMinWords == 0 {
+			c.Runtime.CPUDeepMinWords = 10
+		}
+		if c.Runtime.CPUDeepMinChars == 0 {
+			c.Runtime.CPUDeepMinChars = 24
+		}
+		if queryConcurrencyUnset {
+			c.Runtime.QueryMaxConcurrency = 1
+		}
+		if queryTimeoutUnset {
+			c.Runtime.QueryTimeout = 45 * time.Second
+		}
 	}
 }
 

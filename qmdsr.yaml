@@ -42,10 +42,10 @@ collections:
 
 search:
   default_mode: auto
-  coarse_k: 20
-  top_k: 8
-  min_score: 0.3
-  max_chars: 9000
+  coarse_k: 12
+  top_k: 6
+  min_score: 0.38
+  max_chars: 7000
   fallback_enabled: true
 
 cache:
@@ -74,3 +74,9 @@ logging:
 
 runtime:
   low_resource_mode: true
+  allow_cpu_deep_query: true
+  smart_routing: true
+  cpu_deep_min_words: 10
+  cpu_deep_min_chars: 24
+  query_max_concurrency: 1
+  query_timeout: 45s
