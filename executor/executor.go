@@ -10,7 +10,6 @@ type SearchOpts struct {
 	Collection string
 	N          int
 	MinScore   float64
-	Format     string
 	Full       bool
 }
 

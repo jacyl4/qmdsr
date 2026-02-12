@@ -7,15 +7,15 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 	"time"
-	"unicode"
 
 	"qmdsr/cache"
 	"qmdsr/config"
 	"qmdsr/executor"
+	"qmdsr/internal/searchutil"
+	"qmdsr/internal/textutil"
 	"qmdsr/model"
 	"qmdsr/router"
 )
@@ -88,7 +88,6 @@ type SearchParams struct {
 	MinScore              float64
 	Fallback              bool
 	DisableDeepEscalation bool
-	Format                string
 	Confirm               bool
 }
 
@@ -190,7 +189,7 @@ func (o *Orchestrator) allowAutoDeepQuery(query string) bool {
 	}
 
 	chars := runeLen(q)
-	words := countWords(q)
+	words := textutil.CountWordsMaxFieldsOrCJK(q)
 	abstractCues := countAbstractCues(q)
 
 	if chars < o.cfg.Runtime.CPUDeepMinChars {
@@ -215,7 +214,7 @@ func (o *Orchestrator) allowAutoDeepQuery(query string) bool {
 	}
 
 	if hasQuestionCue(q) {
-		return words >= 4 || countCJK(q) >= 6
+		return words >= 4 || textutil.CountCJK(q) >= 6
 	}
 
 	return false
@@ -229,25 +228,6 @@ func (o *Orchestrator) AllowDeepQuery(query string) bool {
 
 func runeLen(s string) int {
 	return len([]rune(s))
-}
-
-func countWords(s string) int {
-	asciiWords := len(strings.Fields(s))
-	cjkWords := countCJK(s)
-	if cjkWords > asciiWords {
-		return cjkWords
-	}
-	return asciiWords
-}
-
-func countCJK(s string) int {
-	n := 0
-	for _, r := range s {
-		if isCJK(r) {
-			n++
-		}
-	}
-	return n
 }
 
 func hasQuestionCue(s string) bool {
@@ -279,10 +259,6 @@ func countAbstractCues(s string) int {
 	return count
 }
 
-func isCJK(r rune) bool {
-	return unicode.Is(unicode.Han, r)
-}
-
 func (o *Orchestrator) searchSingleCollection(ctx context.Context, params SearchParams, mode router.Mode, cacheKey string, start time.Time) (*SearchResult, error) {
 	colCfg := o.findCollection(params.Collection)
 	if colCfg == nil {
@@ -301,16 +277,7 @@ func (o *Orchestrator) searchSingleCollection(ctx context.Context, params Search
 	results = o.filterExclude(results, colCfg)
 	results = o.filterMinScore(results, params.MinScore)
 
-	o.cacheResults(cacheKey, results, string(mode), params.Collection, false, false, "")
-
-	return &SearchResult{
-		Results: results,
-		Meta: model.SearchMeta{
-			ModeUsed:            string(mode),
-			CollectionsSearched: []string{params.Collection},
-			LatencyMs:           time.Since(start).Milliseconds(),
-		},
-	}, nil
+	return o.cacheAndBuildSearchResult(cacheKey, results, mode, []string{params.Collection}, false, false, "", start), nil
 }
 
 func (o *Orchestrator) searchSingleCollectionWithDeepFallback(ctx context.Context, params SearchParams, cacheKey string, start time.Time) (*SearchResult, error) {
@@ -333,17 +300,7 @@ func (o *Orchestrator) searchSingleCollectionWithDeepFallback(ctx context.Contex
 	broadResults = o.finalizeResults(broadResults, params.N)
 
 	if ok, reason := o.shouldSkipDeepByNegativeCache(params.Query, params.Collection); ok {
-		o.cacheResults(cacheKey, broadResults, string(router.ModeSearch), params.Collection, false, true, reason)
-		return &SearchResult{
-			Results: broadResults,
-			Meta: model.SearchMeta{
-				ModeUsed:            string(router.ModeSearch),
-				CollectionsSearched: []string{params.Collection},
-				Degraded:            true,
-				DegradeReason:       reason,
-				LatencyMs:           time.Since(start).Milliseconds(),
-			},
-		}, nil
+		return o.cacheAndBuildSearchResult(cacheKey, broadResults, router.ModeSearch, []string{params.Collection}, false, true, reason, start), nil
 	}
 
 	deepCtx, cancel := context.WithTimeout(ctx, o.deepFailTimeout())
@@ -351,17 +308,7 @@ func (o *Orchestrator) searchSingleCollectionWithDeepFallback(ctx context.Contex
 	deepResults, deepErr := o.execSearch(deepCtx, router.ModeQuery, params.Query, params.Collection, params)
 	if deepErr != nil {
 		o.markDeepNegative(params.Query, params.Collection)
-		o.cacheResults(cacheKey, broadResults, string(router.ModeSearch), params.Collection, false, true, "deep_failed_fallback_broad")
-		return &SearchResult{
-			Results: broadResults,
-			Meta: model.SearchMeta{
-				ModeUsed:            string(router.ModeSearch),
-				CollectionsSearched: []string{params.Collection},
-				Degraded:            true,
-				DegradeReason:       "deep_failed_fallback_broad",
-				LatencyMs:           time.Since(start).Milliseconds(),
-			},
-		}, nil
+		return o.cacheAndBuildSearchResult(cacheKey, broadResults, router.ModeSearch, []string{params.Collection}, false, true, "deep_failed_fallback_broad", start), nil
 	}
 
 	deepResults = o.filterExclude(deepResults, colCfg)
@@ -369,46 +316,17 @@ func (o *Orchestrator) searchSingleCollectionWithDeepFallback(ctx context.Contex
 	deepResults = o.finalizeResults(deepResults, params.N)
 
 	if len(deepResults) == 0 {
-		o.cacheResults(cacheKey, broadResults, string(router.ModeSearch), params.Collection, false, true, "deep_empty_fallback_broad")
-		return &SearchResult{
-			Results: broadResults,
-			Meta: model.SearchMeta{
-				ModeUsed:            string(router.ModeSearch),
-				CollectionsSearched: []string{params.Collection},
-				Degraded:            true,
-				DegradeReason:       "deep_empty_fallback_broad",
-				LatencyMs:           time.Since(start).Milliseconds(),
-			},
-		}, nil
+		return o.cacheAndBuildSearchResult(cacheKey, broadResults, router.ModeSearch, []string{params.Collection}, false, true, "deep_empty_fallback_broad", start), nil
 	}
 
-	o.cacheResults(cacheKey, deepResults, string(router.ModeQuery), params.Collection, false, false, "")
-	return &SearchResult{
-		Results: deepResults,
-		Meta: model.SearchMeta{
-			ModeUsed:            string(router.ModeQuery),
-			CollectionsSearched: []string{params.Collection},
-			LatencyMs:           time.Since(start).Milliseconds(),
-		},
-	}, nil
+	return o.cacheAndBuildSearchResult(cacheKey, deepResults, router.ModeQuery, []string{params.Collection}, false, false, "", start), nil
 }
 
 func (o *Orchestrator) searchWithDeepFallback(ctx context.Context, params SearchParams, cacheKey string, start time.Time) (*SearchResult, error) {
 	broadResults, broadSearched, broadFallback := o.searchBroadAll(ctx, params)
 
 	if ok, reason := o.shouldSkipDeepByNegativeCache(params.Query, "all"); ok {
-		o.cacheResults(cacheKey, broadResults, string(router.ModeSearch), strings.Join(broadSearched, ","), broadFallback, true, reason)
-		return &SearchResult{
-			Results: broadResults,
-			Meta: model.SearchMeta{
-				ModeUsed:            string(router.ModeSearch),
-				CollectionsSearched: broadSearched,
-				FallbackTriggered:   broadFallback,
-				Degraded:            true,
-				DegradeReason:       reason,
-				LatencyMs:           time.Since(start).Milliseconds(),
-			},
-		}, nil
+		return o.cacheAndBuildSearchResult(cacheKey, broadResults, router.ModeSearch, broadSearched, broadFallback, true, reason, start), nil
 	}
 
 	deepCtx, cancel := context.WithTimeout(ctx, o.deepFailTimeout())
@@ -416,79 +334,21 @@ func (o *Orchestrator) searchWithDeepFallback(ctx context.Context, params Search
 	deepResults, deepSearched, deepErr := o.searchDeepTier1(deepCtx, params)
 	if deepErr != nil {
 		o.markDeepNegative(params.Query, "all")
-		o.cacheResults(cacheKey, broadResults, string(router.ModeSearch), strings.Join(broadSearched, ","), broadFallback, true, "deep_failed_fallback_broad")
-		return &SearchResult{
-			Results: broadResults,
-			Meta: model.SearchMeta{
-				ModeUsed:            string(router.ModeSearch),
-				CollectionsSearched: broadSearched,
-				FallbackTriggered:   broadFallback,
-				Degraded:            true,
-				DegradeReason:       "deep_failed_fallback_broad",
-				LatencyMs:           time.Since(start).Milliseconds(),
-			},
-		}, nil
+		return o.cacheAndBuildSearchResult(cacheKey, broadResults, router.ModeSearch, broadSearched, broadFallback, true, "deep_failed_fallback_broad", start), nil
 	}
 
 	deepResults = o.finalizeResults(o.filterMinScore(deepResults, params.MinScore), params.N)
 	if len(deepResults) == 0 {
-		o.cacheResults(cacheKey, broadResults, string(router.ModeSearch), strings.Join(broadSearched, ","), broadFallback, true, "deep_empty_fallback_broad")
-		return &SearchResult{
-			Results: broadResults,
-			Meta: model.SearchMeta{
-				ModeUsed:            string(router.ModeSearch),
-				CollectionsSearched: broadSearched,
-				FallbackTriggered:   broadFallback,
-				Degraded:            true,
-				DegradeReason:       "deep_empty_fallback_broad",
-				LatencyMs:           time.Since(start).Milliseconds(),
-			},
-		}, nil
+		return o.cacheAndBuildSearchResult(cacheKey, broadResults, router.ModeSearch, broadSearched, broadFallback, true, "deep_empty_fallback_broad", start), nil
 	}
 
-	o.cacheResults(cacheKey, deepResults, string(router.ModeQuery), strings.Join(deepSearched, ","), false, false, "")
-	return &SearchResult{
-		Results: deepResults,
-		Meta: model.SearchMeta{
-			ModeUsed:            string(router.ModeQuery),
-			CollectionsSearched: deepSearched,
-			LatencyMs:           time.Since(start).Milliseconds(),
-		},
-	}, nil
+	return o.cacheAndBuildSearchResult(cacheKey, deepResults, router.ModeQuery, deepSearched, false, false, "", start), nil
 }
 
 func (o *Orchestrator) searchWithFallback(ctx context.Context, params SearchParams, mode router.Mode, cacheKey string, start time.Time) (*SearchResult, error) {
-	tier1 := o.collectionsByTier(1)
-	var allResults []model.SearchResult
-	var searched []string
-
-	for _, col := range tier1 {
-		results, err := o.execSearch(ctx, mode, params.Query, col.Name, params)
-		if err != nil {
-			o.log.Warn("search failed", "collection", col.Name, "err", err)
-			continue
-		}
-		results = o.filterExclude(results, &col)
-		allResults = append(allResults, results...)
-		searched = append(searched, col.Name)
-	}
-
-	filtered := o.filterMinScore(allResults, params.MinScore)
-	fallbackTriggered := false
+	filtered, searched, fallbackTriggered := o.searchPrimaryWithTierFallback(ctx, params, mode, "search failed")
 	degraded := false
 	degradeReason := ""
-
-	if len(filtered) == 0 && params.Fallback && o.cfg.Search.FallbackEnabled {
-		tier2 := o.collectionsByTier(2)
-		if len(tier2) > 0 {
-			fallbackTriggered = true
-			t2Results := o.searchTierParallel(ctx, tier2, mode, params)
-			filtered = o.filterMinScore(t2Results, params.MinScore)
-			for _, col := range tier2 {
-				searched = append(searched, col.Name)
-			}
-		}
-	}
 
 	if !params.DisableDeepEscalation && mode == router.ModeSearch && len(filtered) == 0 && o.exec.HasCapability("deep_query") {
 		if o.allowAutoDeepQuery(params.Query) {
@@ -561,36 +421,7 @@ func (o *Orchestrator) searchTierParallel(ctx context.Context, cols []config.Col
 }
 
 func (o *Orchestrator) searchBroadAll(ctx context.Context, params SearchParams) ([]model.SearchResult, []string, bool) {
-	tier1 := o.collectionsByTier(1)
-	var allResults []model.SearchResult
-	var searched []string
-
-	for _, col := range tier1 {
-		results, err := o.execSearch(ctx, router.ModeSearch, params.Query, col.Name, params)
-		if err != nil {
-			o.log.Warn("broad search failed", "collection", col.Name, "err", err)
-			continue
-		}
-		results = o.filterExclude(results, &col)
-		allResults = append(allResults, results...)
-		searched = append(searched, col.Name)
-	}
-
-	filtered := o.filterMinScore(allResults, params.MinScore)
-	fallbackTriggered := false
-
-	if len(filtered) == 0 && params.Fallback && o.cfg.Search.FallbackEnabled {
-		tier2 := o.collectionsByTier(2)
-		if len(tier2) > 0 {
-			fallbackTriggered = true
-			t2Results := o.searchTierParallel(ctx, tier2, router.ModeSearch, params)
-			filtered = o.filterMinScore(t2Results, params.MinScore)
-			for _, col := range tier2 {
-				searched = append(searched, col.Name)
-			}
-		}
-	}
-
+	filtered, searched, fallbackTriggered := o.searchPrimaryWithTierFallback(ctx, params, router.ModeSearch, "broad search failed")
 	filtered = o.finalizeResults(filtered, params.N)
 	return filtered, searched, fallbackTriggered
 }
@@ -735,12 +566,7 @@ func (o *Orchestrator) cacheResults(key string, results []model.SearchResult, mo
 }
 
 func (o *Orchestrator) finalizeResults(results []model.SearchResult, n int) []model.SearchResult {
-	results = dedup(results)
-	sortByScore(results)
-	if n > 0 && len(results) > n {
-		return results[:n]
-	}
-	return results
+	return searchutil.DedupSortLimit(results, n)
 }
 
 func (o *Orchestrator) deepFailTimeout() time.Duration {
@@ -800,24 +626,51 @@ func (o *Orchestrator) deepNegativeKey(query, scope string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func dedup(results []model.SearchResult) []model.SearchResult {
-	seen := make(map[string]bool)
-	deduped := make([]model.SearchResult, 0, len(results))
-	for _, r := range results {
-		key := r.File
-		if r.DocID != "" {
-			key = r.DocID
+func (o *Orchestrator) searchPrimaryWithTierFallback(ctx context.Context, params SearchParams, mode router.Mode, logMsg string) ([]model.SearchResult, []string, bool) {
+	tier1 := o.collectionsByTier(1)
+	var allResults []model.SearchResult
+	var searched []string
+
+	for _, col := range tier1 {
+		results, err := o.execSearch(ctx, mode, params.Query, col.Name, params)
+		if err != nil {
+			o.log.Warn(logMsg, "collection", col.Name, "err", err)
+			continue
 		}
-		if !seen[key] {
-			seen[key] = true
-			deduped = append(deduped, r)
+		results = o.filterExclude(results, &col)
+		allResults = append(allResults, results...)
+		searched = append(searched, col.Name)
+	}
+
+	filtered := o.filterMinScore(allResults, params.MinScore)
+	fallbackTriggered := false
+
+	if len(filtered) == 0 && params.Fallback && o.cfg.Search.FallbackEnabled {
+		tier2 := o.collectionsByTier(2)
+		if len(tier2) > 0 {
+			fallbackTriggered = true
+			t2Results := o.searchTierParallel(ctx, tier2, mode, params)
+			filtered = o.filterMinScore(t2Results, params.MinScore)
+			for _, col := range tier2 {
+				searched = append(searched, col.Name)
+			}
 		}
 	}
-	return deduped
+
+	return filtered, searched, fallbackTriggered
 }
 
-func sortByScore(results []model.SearchResult) {
-	sort.Slice(results, func(i, j int) bool {
-		return results[i].Score > results[j].Score
-	})
+func (o *Orchestrator) cacheAndBuildSearchResult(cacheKey string, results []model.SearchResult, mode router.Mode, searched []string, fallbackTriggered bool, degraded bool, degradeReason string, start time.Time) *SearchResult {
+	o.cacheResults(cacheKey, results, string(mode), strings.Join(searched, ","), fallbackTriggered, degraded, degradeReason)
+	return &SearchResult{
+		Results: results,
+		Meta: model.SearchMeta{
+			ModeUsed:            string(mode),
+			CollectionsSearched: searched,
+			FallbackTriggered:   fallbackTriggered,
+			Degraded:            degraded,
+			DegradeReason:       degradeReason,
+			LatencyMs:           time.Since(start).Milliseconds(),
+		},
+	}
 }

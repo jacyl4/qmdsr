@@ -185,10 +185,16 @@ func (c *Config) normalize() {
 	if c.Logging.Level == "" {
 		c.Logging.Level = "info"
 	}
+
+	c.applyRuntimeDefaults()
+}
+
+func (c *Config) applyRuntimeDefaults() {
 	queryTimeoutUnset := c.Runtime.QueryTimeout == 0
 	queryConcurrencyUnset := c.Runtime.QueryMaxConcurrency == 0
 	deepFailTimeoutUnset := c.Runtime.DeepFailTimeout == 0
 	deepNegativeTTLUnset := c.Runtime.DeepNegativeTTL == 0
+
 	if queryTimeoutUnset {
 		c.Runtime.QueryTimeout = 120 * time.Second
 	}
@@ -201,35 +207,41 @@ func (c *Config) normalize() {
 	if deepNegativeTTLUnset {
 		c.Runtime.DeepNegativeTTL = 10 * time.Minute
 	}
+
 	if c.Runtime.LowResourceMode && c.Runtime.AllowCPUDeepQuery {
-		c.Runtime.SmartRouting = true
-		if c.Runtime.CPUDeepMinWords == 0 {
-			c.Runtime.CPUDeepMinWords = 10
-		}
-		if c.Runtime.CPUDeepMinChars == 0 {
-			c.Runtime.CPUDeepMinChars = 24
-		}
-		if c.Runtime.CPUDeepMaxWords == 0 {
-			c.Runtime.CPUDeepMaxWords = 28
-		}
-		if c.Runtime.CPUDeepMaxChars == 0 {
-			c.Runtime.CPUDeepMaxChars = 160
-		}
-		if c.Runtime.CPUDeepMaxAbstractCues == 0 {
-			c.Runtime.CPUDeepMaxAbstractCues = 2
-		}
-		if queryConcurrencyUnset {
-			c.Runtime.QueryMaxConcurrency = 1
-		}
-		if queryTimeoutUnset {
-			c.Runtime.QueryTimeout = 45 * time.Second
-		}
-		if deepFailTimeoutUnset {
-			c.Runtime.DeepFailTimeout = 12 * time.Second
-		}
-		if deepNegativeTTLUnset {
-			c.Runtime.DeepNegativeTTL = 15 * time.Minute
-		}
+		c.applyLowResourceRuntimeProfile(queryTimeoutUnset, queryConcurrencyUnset, deepFailTimeoutUnset, deepNegativeTTLUnset)
+	}
+}
+
+func (c *Config) applyLowResourceRuntimeProfile(queryTimeoutUnset, queryConcurrencyUnset, deepFailTimeoutUnset, deepNegativeTTLUnset bool) {
+	c.Runtime.SmartRouting = true
+
+	if c.Runtime.CPUDeepMinWords == 0 {
+		c.Runtime.CPUDeepMinWords = 10
+	}
+	if c.Runtime.CPUDeepMinChars == 0 {
+		c.Runtime.CPUDeepMinChars = 24
+	}
+	if c.Runtime.CPUDeepMaxWords == 0 {
+		c.Runtime.CPUDeepMaxWords = 28
+	}
+	if c.Runtime.CPUDeepMaxChars == 0 {
+		c.Runtime.CPUDeepMaxChars = 160
+	}
+	if c.Runtime.CPUDeepMaxAbstractCues == 0 {
+		c.Runtime.CPUDeepMaxAbstractCues = 2
+	}
+	if queryConcurrencyUnset {
+		c.Runtime.QueryMaxConcurrency = 1
+	}
+	if queryTimeoutUnset {
+		c.Runtime.QueryTimeout = 45 * time.Second
+	}
+	if deepFailTimeoutUnset {
+		c.Runtime.DeepFailTimeout = 12 * time.Second
+	}
+	if deepNegativeTTLUnset {
+		c.Runtime.DeepNegativeTTL = 15 * time.Minute
 	}
 }
 

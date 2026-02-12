@@ -5,6 +5,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"qmdsr/internal/textutil"
 )
 
 type Mode string
@@ -39,7 +41,7 @@ func DetectMode(query string, hasVector bool, hasDeepQuery bool) Mode {
 		return ModeSearch
 	}
 
-	words := countWords(query)
+	words := textutil.CountWordsMixed(query)
 	if words <= 3 && isPredominantlyASCII(query) {
 		return ModeSearch
 	}
@@ -67,34 +69,6 @@ func DetectMode(query string, hasVector bool, hasDeepQuery bool) Mode {
 	return ModeSearch
 }
 
-func countWords(s string) int {
-	count := 0
-	inWord := false
-	for _, r := range s {
-		if unicode.IsSpace(r) {
-			if inWord {
-				count++
-				inWord = false
-			}
-		} else {
-			if !inWord {
-				inWord = true
-			}
-			if isCJK(r) {
-				if inWord {
-					count++
-					inWord = false
-				}
-				count++
-			}
-		}
-	}
-	if inWord {
-		count++
-	}
-	return count
-}
-
 func isPredominantlyASCII(s string) bool {
 	ascii := 0
 	total := 0
@@ -112,11 +86,4 @@ func isPredominantlyASCII(s string) bool {
 		return true
 	}
 	return float64(ascii)/float64(total) > 0.8
-}
-
-func isCJK(r rune) bool {
-	return (r >= 0x4E00 && r <= 0x9FFF) ||
-		(r >= 0x3400 && r <= 0x4DBF) ||
-		(r >= 0x20000 && r <= 0x2A6DF) ||
-		(r >= 0xF900 && r <= 0xFAFF)
 }

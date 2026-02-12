@@ -3,11 +3,11 @@ package api
 import (
 	"context"
 	"fmt"
-	"math"
 	"sort"
 	"strings"
 	"time"
 
+	"qmdsr/internal/searchutil"
 	"qmdsr/internal/version"
 	"qmdsr/model"
 	"qmdsr/orchestrator"
@@ -144,7 +144,7 @@ func (s *Server) executeSearchCore(ctx context.Context, req searchCoreRequest) (
 		modeUsed = "search"
 	}
 
-	combined = dedupSortLimit(combined, topK)
+	combined = searchutil.DedupSortLimit(combined, topK)
 	collectionsSearched := sortedKeys(searchedSet)
 	servedMode := deriveServedMode(requestedMode, modeUsed, fallbackTriggered, degraded)
 	if requestedMode == "deep" && servedMode != "deep" {
@@ -192,123 +192,6 @@ func (s *Server) executeSearchCore(ctx context.Context, req searchCoreRequest) (
 	}
 
 	return &searchCoreResult{Response: resp, RouteLog: routeLog}, nil
-}
-
-func requestedModeToOrchestratorMode(mode string) string {
-	switch mode {
-	case "core", "broad":
-		return "search"
-	case "deep":
-		return "query"
-	default:
-		return "auto"
-	}
-}
-
-func normalizeRequestedMode(mode string) string {
-	switch strings.ToLower(strings.TrimSpace(mode)) {
-	case "core", "search":
-		return "core"
-	case "broad", "vsearch":
-		return "broad"
-	case "deep", "query":
-		return "deep"
-	default:
-		return "auto"
-	}
-}
-
-func normalizeCollections(cols []string) []string {
-	if len(cols) == 0 {
-		return nil
-	}
-	set := make(map[string]struct{}, len(cols))
-	for _, c := range cols {
-		c = strings.TrimSpace(c)
-		if c == "" {
-			continue
-		}
-		set[c] = struct{}{}
-	}
-	return sortedKeys(set)
-}
-
-func sortedKeys(set map[string]struct{}) []string {
-	if len(set) == 0 {
-		return []string{}
-	}
-	keys := make([]string, 0, len(set))
-	for k := range set {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
-}
-
-func dedupSortLimit(results []model.SearchResult, topK int) []model.SearchResult {
-	seen := make(map[string]struct{}, len(results))
-	deduped := make([]model.SearchResult, 0, len(results))
-	for _, r := range results {
-		key := strings.TrimSpace(r.DocID)
-		if key == "" {
-			key = strings.TrimSpace(r.File)
-		}
-		if key == "" {
-			key = fmt.Sprintf("%s|%s|%0.4f", r.Title, r.Snippet, r.Score)
-		}
-		if _, ok := seen[key]; ok {
-			continue
-		}
-		seen[key] = struct{}{}
-		deduped = append(deduped, r)
-	}
-
-	sort.Slice(deduped, func(i, j int) bool {
-		return deduped[i].Score > deduped[j].Score
-	})
-
-	if topK > 0 && len(deduped) > topK {
-		return deduped[:topK]
-	}
-	return deduped
-}
-
-func deriveServedMode(requestedMode, modeUsed string, fallbackTriggered, degraded bool) string {
-	if modeUsed == "query" {
-		return "deep"
-	}
-
-	switch requestedMode {
-	case "deep":
-		return "broad"
-	case "broad":
-		return "broad"
-	case "core":
-		if fallbackTriggered {
-			return "broad"
-		}
-		return "core"
-	default:
-		if fallbackTriggered || degraded {
-			return "broad"
-		}
-		return "core"
-	}
-}
-
-func buildRouteLog(requestedMode string, allowFallback bool, orchestratorMode string, meta model.SearchMeta, collectionCount int, hitCount int) []string {
-	return []string{
-		"requested_mode=" + requestedMode,
-		"orchestrator_mode=" + orchestratorMode,
-		fmt.Sprintf("allow_fallback=%t", allowFallback),
-		fmt.Sprintf("collections=%d", collectionCount),
-		"mode_used=" + meta.ModeUsed,
-		"served_mode=" + meta.ServedMode,
-		fmt.Sprintf("degraded=%t", meta.Degraded),
-		"degrade_reason=" + meta.DegradeReason,
-		fmt.Sprintf("hits=%d", hitCount),
-		fmt.Sprintf("cache_hit=%t", meta.CacheHit),
-	}
 }
 
 func (s *Server) buildHealthResponse() *qmdsrv1.HealthResponse {
@@ -361,26 +244,4 @@ func (s *Server) buildStatusResponse(traceID string) *qmdsrv1.StatusResponse {
 		DeepNegativeTtlSec:  durationToInt32Seconds(s.cfg.Runtime.DeepNegativeTTL),
 		TraceId:             traceID,
 	}
-}
-
-func durationToInt32Milliseconds(d time.Duration) int32 {
-	if d <= 0 {
-		return 0
-	}
-	ms := d.Milliseconds()
-	if ms > int64(math.MaxInt32) {
-		return math.MaxInt32
-	}
-	return int32(ms)
-}
-
-func durationToInt32Seconds(d time.Duration) int32 {
-	if d <= 0 {
-		return 0
-	}
-	sec := int64(d / time.Second)
-	if sec > int64(math.MaxInt32) {
-		return math.MaxInt32
-	}
-	return int32(sec)
 }

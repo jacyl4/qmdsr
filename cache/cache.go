@@ -19,7 +19,6 @@ type Entry struct {
 	Query             string
 	Mode              string
 	Collection        string
-	Collections       []string
 	FallbackTriggered bool
 	Degraded          bool
 	DegradeReason     string
