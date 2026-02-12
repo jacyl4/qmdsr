@@ -50,6 +50,9 @@ func (s *SelfHealer) CheckIndexDB(_ context.Context) (model.HealthLevel, string)
 }
 
 func (s *SelfHealer) CheckEmbeddings(ctx context.Context) (model.HealthLevel, string) {
+	if s.cfg.Runtime.LowResourceMode {
+		return model.Healthy, "embeddings check disabled in low_resource_mode"
+	}
 	if !s.exec.HasCapability("status") {
 		return model.Healthy, "status capability not available, skipping embed check"
 	}

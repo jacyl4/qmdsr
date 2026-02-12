@@ -52,6 +52,7 @@ func main() {
 	logger.Info("qmdsr starting",
 		"listen", cfg.Server.Listen,
 		"collections", len(cfg.Collections),
+		"low_resource_mode", cfg.Runtime.LowResourceMode,
 		"version", version.Version,
 		"commit", version.Commit,
 		"build_time", version.BuildTime,

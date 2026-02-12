@@ -71,3 +71,6 @@ logging:
   file: /var/log/qmdsr/qmdsr.log
   max_size: 10MB
   max_backups: 3
+
+runtime:
+  low_resource_mode: true

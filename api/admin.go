@@ -43,6 +43,11 @@ func (s *Server) handleAdminReindex(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAdminEmbed(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.Runtime.LowResourceMode {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "embed disabled in low_resource_mode"})
+		return
+	}
+
 	force := r.URL.Query().Get("force") == "1"
 	if err := s.sched.TriggerEmbed(r.Context(), force); err != nil {
 		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())

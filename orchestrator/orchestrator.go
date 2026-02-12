@@ -123,10 +123,27 @@ func (o *Orchestrator) Search(ctx context.Context, params SearchParams) (*Search
 }
 
 func (o *Orchestrator) resolveMode(requested string, query string) router.Mode {
+	var mode router.Mode
 	if requested != "" && requested != "auto" {
-		return router.Mode(requested)
+		mode = router.Mode(requested)
+	} else {
+		mode = router.DetectMode(query, o.exec.HasCapability("vector"), o.exec.HasCapability("deep_query"))
 	}
-	return router.DetectMode(query, o.exec.HasCapability("vector"), o.exec.HasCapability("deep_query"))
+
+	switch mode {
+	case router.ModeQuery:
+		if !o.exec.HasCapability("deep_query") {
+			o.log.Debug("query mode unavailable, fallback to search")
+			return router.ModeSearch
+		}
+	case router.ModeVSearch:
+		if !o.exec.HasCapability("vector") {
+			o.log.Debug("vsearch mode unavailable, fallback to search")
+			return router.ModeSearch
+		}
+	}
+
+	return mode
 }
 
 func (o *Orchestrator) searchSingleCollection(ctx context.Context, params SearchParams, mode router.Mode, cacheKey string, start time.Time) (*SearchResult, error) {

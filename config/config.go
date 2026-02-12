@@ -19,6 +19,7 @@ type Config struct {
 	Scheduler  SchedulerConfig  `yaml:"scheduler"`
 	Guardian   GuardianConfig   `yaml:"guardian"`
 	Logging    LoggingConfig    `yaml:"logging"`
+	Runtime    RuntimeConfig    `yaml:"runtime"`
 }
 
 type QMDConfig struct {
@@ -79,6 +80,10 @@ type LoggingConfig struct {
 	File       string `yaml:"file"`
 	MaxSize    string `yaml:"max_size"`
 	MaxBackups int    `yaml:"max_backups"`
+}
+
+type RuntimeConfig struct {
+	LowResourceMode bool `yaml:"low_resource_mode"`
 }
 
 func Load(path string) (*Config, error) {

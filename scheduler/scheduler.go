@@ -38,8 +38,12 @@ func (s *Scheduler) Start(ctx context.Context) {
 	ctx, s.cancel = context.WithCancel(ctx)
 
 	go s.loop(ctx, "index_refresh", s.cfg.Scheduler.IndexRefresh, s.taskReindex)
-	go s.loop(ctx, "embed_refresh", s.cfg.Scheduler.EmbedRefresh, s.taskEmbed)
-	go s.loop(ctx, "embed_full_refresh", s.cfg.Scheduler.EmbedFullRefresh, s.taskEmbedFull)
+	if !s.cfg.Runtime.LowResourceMode {
+		go s.loop(ctx, "embed_refresh", s.cfg.Scheduler.EmbedRefresh, s.taskEmbed)
+		go s.loop(ctx, "embed_full_refresh", s.cfg.Scheduler.EmbedFullRefresh, s.taskEmbedFull)
+	} else {
+		s.log.Info("low_resource_mode enabled, scheduled embed tasks disabled")
+	}
 	go s.loop(ctx, "cache_cleanup", s.cfg.Scheduler.CacheCleanup, s.taskCacheCleanup)
 
 	s.log.Info("scheduler started",
@@ -63,6 +67,10 @@ func (s *Scheduler) TriggerReindex(ctx context.Context) error {
 }
 
 func (s *Scheduler) TriggerEmbed(ctx context.Context, force bool) error {
+	if s.cfg.Runtime.LowResourceMode {
+		s.log.Info("embed trigger skipped in low_resource_mode", "force", force)
+		return nil
+	}
 	name := "embed_refresh"
 	if force {
 		name = "embed_full_refresh"
