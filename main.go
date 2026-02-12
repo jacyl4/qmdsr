@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -17,6 +18,7 @@ import (
 	"qmdsr/executor"
 	"qmdsr/guardian"
 	"qmdsr/heartbeat"
+	"qmdsr/internal/version"
 	"qmdsr/memory"
 	"qmdsr/model"
 	"qmdsr/orchestrator"
@@ -25,7 +27,19 @@ import (
 
 func main() {
 	configPath := flag.String("config", "/etc/qmdsr/qmdsr.yaml", "path to config file")
+	showVersionShort := flag.Bool("v", false, "print version information")
+	showVersion := flag.Bool("version", false, "print version information")
 	flag.Parse()
+
+	if *showVersionShort || *showVersion {
+		fmt.Printf(
+			"qmdsr %s\ncommit: %s\nbuild: %s\n",
+			version.Version,
+			version.Commit,
+			version.BuildTime,
+		)
+		return
+	}
 
 	cfg, err := config.Load(*configPath)
 	if err != nil {
@@ -38,6 +52,9 @@ func main() {
 	logger.Info("qmdsr starting",
 		"listen", cfg.Server.Listen,
 		"collections", len(cfg.Collections),
+		"version", version.Version,
+		"commit", version.Commit,
+		"build_time", version.BuildTime,
 	)
 
 	exec, err := executor.NewCLI(cfg, logger.With("component", "executor"))
