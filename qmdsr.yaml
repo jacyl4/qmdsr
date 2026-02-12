@@ -4,7 +4,7 @@ qmd:
   mcp_port: 8181
 
 server:
-  listen: 127.0.0.1:19090
+  grpc_listen: 127.0.0.1:19091
   security_model: loopback_trust
 
 collections:

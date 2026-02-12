@@ -9,6 +9,7 @@ User=jacyl4
 Group=jacyl4
 Restart=always
 RestartSec=5
+OOMPolicy=continue
 Environment=HOME=/home/jacyl4
 RuntimeDirectory=qmdsr
 LogsDirectory=qmdsr

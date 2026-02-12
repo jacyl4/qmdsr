@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package qmdsr.v1;
+
+option go_package = "qmdsr/pb/qmdsrv1;qmdsrv1";
+
+import "google/protobuf/empty.proto";
+
+service AdminService {
+  rpc Reindex(google.protobuf.Empty) returns (OpResponse);
+  rpc Embed(EmbedRequest) returns (OpResponse);
+  rpc CacheClear(google.protobuf.Empty) returns (OpResponse);
+  rpc Collections(google.protobuf.Empty) returns (CollectionsResponse);
+  rpc MCPRestart(google.protobuf.Empty) returns (OpResponse);
+}
+
+message EmbedRequest {
+  bool force = 1;
+}
+
+message OpResponse {
+  bool ok = 1;
+  string message = 2;
+  string trace_id = 3;
+  int64 latency_ms = 4;
+}
+
+message CollectionInfo {
+  string name = 1;
+  string path = 2;
+  string mask = 3;
+  int32 files = 4;
+}
+
+message CollectionsResponse {
+  repeated CollectionInfo collections = 1;
+  string trace_id = 2;
+  int64 latency_ms = 3;
+}

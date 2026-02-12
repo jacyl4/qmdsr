@@ -13,11 +13,13 @@ type SearchResult struct {
 
 type SearchMeta struct {
 	ModeUsed            string   `json:"mode_used"`
+	ServedMode          string   `json:"served_mode,omitempty"`
 	CollectionsSearched []string `json:"collections_searched"`
 	FallbackTriggered   bool     `json:"fallback_triggered"`
 	CacheHit            bool     `json:"cache_hit"`
 	Degraded            bool     `json:"degraded"`
 	DegradeReason       string   `json:"degrade_reason,omitempty"`
+	TraceID             string   `json:"trace_id,omitempty"`
 	LatencyMs           int64    `json:"latency_ms"`
 }
 

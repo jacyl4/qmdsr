@@ -29,7 +29,7 @@ type QMDConfig struct {
 }
 
 type ServerConfig struct {
-	Listen        string `yaml:"listen"`
+	GRPCListen    string `yaml:"grpc_listen"`
 	SecurityModel string `yaml:"security_model"`
 }
 
@@ -128,8 +128,8 @@ func (c *Config) normalize() {
 		c.Collections[i].Path = expandClean(c.Collections[i].Path)
 	}
 
-	if c.Server.Listen == "" {
-		c.Server.Listen = "127.0.0.1:19090"
+	if c.Server.GRPCListen == "" {
+		c.Server.GRPCListen = "127.0.0.1:19091"
 	}
 	if c.Server.SecurityModel == "" {
 		c.Server.SecurityModel = "loopback_trust"

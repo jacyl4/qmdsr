@@ -33,11 +33,18 @@ sudo systemctl restart qmdsr
 
 echo "=== Verifying ==="
 sleep 2
-if curl -sf http://127.0.0.1:19090/health > /dev/null 2>&1; then
-    echo "qmdsr is running and healthy!"
-    curl -s http://127.0.0.1:19090/health | python3 -m json.tool
+if ! command -v grpcurl >/dev/null 2>&1; then
+    if [[ -x "$HOME/go/bin/grpcurl" ]]; then
+        export PATH="$PATH:$HOME/go/bin"
+    fi
+fi
+
+if command -v grpcurl >/dev/null 2>&1 \
+    && grpcurl -plaintext 127.0.0.1:19091 qmdsr.v1.QueryService/Health > /dev/null 2>&1; then
+    echo "qmdsr gRPC is running and healthy!"
+    grpcurl -plaintext 127.0.0.1:19091 qmdsr.v1.QueryService/Health
 else
-    echo "Warning: qmdsr may not be ready yet. Check: sudo journalctl -u qmdsr -f"
+    echo "Warning: qmdsr gRPC may not be ready yet. Check: sudo journalctl -u qmdsr -f"
 fi
 
 echo "=== Done ==="

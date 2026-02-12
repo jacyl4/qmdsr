@@ -81,14 +81,15 @@ func (o *Orchestrator) EnsureCollections(ctx context.Context) error {
 }
 
 type SearchParams struct {
-	Query      string
-	Mode       string
-	Collection string
-	N          int
-	MinScore   float64
-	Fallback   bool
-	Format     string
-	Confirm    bool
+	Query                 string
+	Mode                  string
+	Collection            string
+	N                     int
+	MinScore              float64
+	Fallback              bool
+	DisableDeepEscalation bool
+	Format                string
+	Confirm               bool
 }
 
 type SearchResult struct {
@@ -204,6 +205,10 @@ func (o *Orchestrator) allowAutoDeepQuery(query string) bool {
 	if o.cfg.Runtime.CPUDeepMaxAbstractCues > 0 && abstractCues > o.cfg.Runtime.CPUDeepMaxAbstractCues {
 		return false
 	}
+	// Guard against OOM-prone abstract long-form prompts on low-resource hosts.
+	if words >= 20 && abstractCues > 0 {
+		return false
+	}
 
 	if words >= o.cfg.Runtime.CPUDeepMinWords {
 		return true
@@ -214,6 +219,12 @@ func (o *Orchestrator) allowAutoDeepQuery(query string) bool {
 	}
 
 	return false
+}
+
+// AllowDeepQuery reports whether the current runtime budget allows executing deep query.
+// In low-resource mode this enforces smart routing budgets; otherwise it always allows.
+func (o *Orchestrator) AllowDeepQuery(query string) bool {
+	return o.allowAutoDeepQuery(query)
 }
 
 func runeLen(s string) int {
@@ -256,7 +267,7 @@ func hasQuestionCue(s string) bool {
 func countAbstractCues(s string) int {
 	lower := strings.ToLower(s)
 	cues := []string{
-		"方案", "策略", "架构", "规划", "体系", "框架", "设计", "tradeoff", "strategy",
+		"方案", "架构", "规划", "体系", "框架", "设计", "tradeoff", "strategy",
 		"architecture", "design", "plan", "migration", "roadmap",
 	}
 	count := 0
@@ -479,7 +490,7 @@ func (o *Orchestrator) searchWithFallback(ctx context.Context, params SearchPara
 		}
 	}
 
-	if mode == router.ModeSearch && len(filtered) == 0 && o.exec.HasCapability("deep_query") {
+	if !params.DisableDeepEscalation && mode == router.ModeSearch && len(filtered) == 0 && o.exec.HasCapability("deep_query") {
 		if o.allowAutoDeepQuery(params.Query) {
 			if ok, reason := o.shouldSkipDeepByNegativeCache(params.Query, "all"); ok {
 				degraded = true

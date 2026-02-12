@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -19,7 +18,6 @@ import (
 	"qmdsr/guardian"
 	"qmdsr/heartbeat"
 	"qmdsr/internal/version"
-	"qmdsr/memory"
 	"qmdsr/model"
 	"qmdsr/orchestrator"
 	"qmdsr/scheduler"
@@ -50,7 +48,7 @@ func main() {
 	logger := setupLogger(cfg)
 
 	logger.Info("qmdsr starting",
-		"listen", cfg.Server.Listen,
+		"grpc_listen", cfg.Server.GRPCListen,
 		"collections", len(cfg.Collections),
 		"low_resource_mode", cfg.Runtime.LowResourceMode,
 		"allow_cpu_deep_query", cfg.Runtime.AllowCPUDeepQuery,
@@ -109,9 +107,6 @@ func main() {
 	})
 	hb.Start(ctx)
 
-	memWriter := memory.NewWriter(cfg, logger.With("component", "memory"))
-	stateMgr := memory.NewStateManager(cfg, logger.With("component", "state"))
-
 	srv := api.NewServer(api.Deps{
 		Config:       cfg,
 		Orchestrator: orch,
@@ -119,22 +114,18 @@ func main() {
 		Scheduler:    sched,
 		Guardian:     guard,
 		Heartbeat:    hb,
-		MemWriter:    memWriter,
-		StateMgr:     stateMgr,
 		Logger:       logger.With("component", "api"),
 	})
 
-	go func() {
-		if err := srv.Start(); err != nil && err != http.ErrServerClosed {
-			logger.Error("HTTP server error", "err", err)
-			os.Exit(1)
-		}
-	}()
+	if err := srv.Start(); err != nil {
+		logger.Error("gRPC server start failed", "err", err)
+		os.Exit(1)
+	}
 
 	go watchdog()
 
 	logger.Info("qmdsr ready",
-		"listen", cfg.Server.Listen,
+		"grpc_listen", cfg.Server.GRPCListen,
 		"pid", os.Getpid(),
 	)
 
@@ -152,7 +143,7 @@ func main() {
 	hb.Stop()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		logger.Error("HTTP server shutdown error", "err", err)
+		logger.Error("gRPC server shutdown error", "err", err)
 	}
 
 	cancel()

@@ -1,0 +1,96 @@
+syntax = "proto3";
+
+package qmdsr.v1;
+
+option go_package = "qmdsr/pb/qmdsrv1;qmdsrv1";
+
+service QueryService {
+  rpc Search(SearchRequest) returns (SearchResponse);
+  rpc Health(HealthRequest) returns (HealthResponse);
+  rpc Status(StatusRequest) returns (StatusResponse);
+  rpc SearchStream(SearchRequest) returns (stream SearchChunk);
+}
+
+enum Mode {
+  MODE_UNSPECIFIED = 0;
+  MODE_CORE = 1;
+  MODE_BROAD = 2;
+  MODE_DEEP = 3;
+  MODE_AUTO = 4;
+}
+
+enum ServedMode {
+  SERVED_UNSPECIFIED = 0;
+  SERVED_CORE = 1;
+  SERVED_BROAD = 2;
+  SERVED_DEEP = 3;
+}
+
+message SearchRequest {
+  string query = 1;
+  Mode requested_mode = 2;
+  repeated string collections = 3;
+  bool allow_fallback = 4;
+  int32 timeout_ms = 5;
+  int32 top_k = 6;
+  double min_score = 7;
+  bool explain = 8;
+}
+
+message Hit {
+  string uri = 1;
+  string title = 2;
+  string snippet = 3;
+  double score = 4;
+  string collection = 5;
+  int32 start_line = 6;
+  int32 end_line = 7;
+}
+
+message SearchResponse {
+  repeated Hit hits = 1;
+  ServedMode served_mode = 2;
+  bool degraded = 3;
+  string degrade_reason = 4;
+  int64 latency_ms = 5;
+  string trace_id = 6;
+  repeated string route_log = 7;
+}
+
+message SearchChunk {
+  oneof payload {
+    Hit hit = 1;
+    SearchResponse summary = 2;
+  }
+}
+
+message HealthRequest {}
+
+message ComponentHealth {
+  string name = 1;
+  string status = 2;
+  string message = 3;
+}
+
+message HealthResponse {
+  string status = 1;
+  repeated ComponentHealth components = 2;
+  string mode = 3;
+  int64 uptime_sec = 4;
+}
+
+message StatusRequest {}
+
+message StatusResponse {
+  string version = 1;
+  string commit = 2;
+  bool low_resource_mode = 3;
+  bool allow_cpu_deep_query = 4;
+  bool deep_query_enabled = 5;
+  bool vector_enabled = 6;
+  int32 query_max_concurrency = 7;
+  int32 query_timeout_ms = 8;
+  int32 deep_fail_timeout_ms = 9;
+  int32 deep_negative_ttl_sec = 10;
+  string trace_id = 11;
+}
