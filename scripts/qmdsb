@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# qmdsb - 广域检索 (通过 qmdsr HTTP)
+curl -s "http://127.0.0.1:19090/api/quick/broad?q=$(printf '%s' "$*" | jq -sRr @uri)"

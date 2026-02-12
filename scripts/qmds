@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# qmds - 核心检索 (通过 qmdsr HTTP)
+curl -s "http://127.0.0.1:19090/api/quick/core?q=$(printf '%s' "$*" | jq -sRr @uri)"

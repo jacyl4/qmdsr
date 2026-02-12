@@ -1,0 +1,18 @@
+[Unit]
+Description=qmdsr - qmd search router middleware
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/qmdsr -config /etc/qmdsr/qmdsr.yaml
+User=jacyl4
+Group=jacyl4
+Restart=always
+RestartSec=5
+Environment=HOME=/home/jacyl4
+RuntimeDirectory=qmdsr
+LogsDirectory=qmdsr
+WatchdogSec=120
+
+[Install]
+WantedBy=multi-user.target

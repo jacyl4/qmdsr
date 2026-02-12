@@ -1,0 +1,73 @@
+qmd:
+  bin: /home/jacyl4/.bun/bin/qmd
+  index_db: ~/.cache/qmd/index.sqlite
+  mcp_port: 8181
+
+server:
+  listen: 127.0.0.1:19090
+  security_model: loopback_trust
+
+collections:
+  - name: claw-memory
+    path: /home/jacyl4/1base/@obsidian/digital/openclaw/workspace/memory
+    mask: "**/*.md"
+    context: "OpenClaw AI助手的工作记忆：GTD任务、每日日志、个人财务、购物清单"
+    tier: 1
+    embed: true
+
+  - name: digital
+    path: /home/jacyl4/1base/@obsidian/digital
+    mask: "**/*.md"
+    exclude:
+      - "openclaw/workspace/**"
+    context: "个人数字知识库：技术笔记、学习资料、开源项目文档、网络架构、Kubernetes、流量整形路由系统"
+    tier: 2
+    embed: true
+
+  - name: yozo
+    path: /home/jacyl4/1base/@obsidian/yozo
+    mask: "**/*.md"
+    context: "工作知识库：公司项目、Kubernetes集群架构重建、企业网络规划"
+    tier: 2
+    embed: true
+
+  - name: personal
+    path: /home/jacyl4/1base/@obsidian/personal
+    mask: "**/*.md"
+    context: "个人隐私知识库：私人笔记、社交关系、生活规划"
+    tier: 99
+    embed: true
+    require_explicit: true
+    safety_prompt: true
+
+search:
+  default_mode: auto
+  coarse_k: 20
+  top_k: 8
+  min_score: 0.3
+  max_chars: 9000
+  fallback_enabled: true
+
+cache:
+  enabled: true
+  ttl: 30m
+  max_entries: 500
+  cleanup_interval: 1h
+  version_aware: true
+
+scheduler:
+  index_refresh: 30m
+  embed_refresh: 24h
+  embed_full_refresh: 168h
+  cache_cleanup: 1h
+
+guardian:
+  check_interval: 60s
+  timeout: 5s
+  restart_max_retries: 3
+
+logging:
+  level: info
+  file: /var/log/qmdsr/qmdsr.log
+  max_size: 10MB
+  max_backups: 3
