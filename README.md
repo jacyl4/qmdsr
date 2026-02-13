@@ -1,6 +1,6 @@
 # qmdsr
 
-qmdsr（QMD Search Router）是一个 gRPC 搜索服务，作为 [qmd](https://github.com/nicholasgasior/qmd) CLI 工具的上层编排层，为 Markdown 知识库提供智能搜索路由、多级缓存、自动降级、CPU 过载保护和进程守护能力。
+qmdsr（QMD Search Router）是一个 gRPC 搜索服务，作为 [qmd](https://github.com/tobi/qmd) CLI 工具的上层编排层，为 Markdown 知识库提供智能搜索路由、多级缓存、自动降级、CPU 过载保护和进程守护能力。
 
 ## 核心功能
 
