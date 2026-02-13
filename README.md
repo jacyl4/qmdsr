@@ -414,6 +414,9 @@ scope cooldown 仅在 `allow_cpu_deep_query: true` 时激活。
 ./qmdsr -config ./qmdsr.yaml
 ```
 
+`qmdsr.yaml` 是**必需配置**，不是可选项。  
+原因很简单：`qmdsr` 本身不存储业务数据，它只负责把请求路由到 qmd；真正的数据来源由 `collections` 定义（每个 `path` 指向要索引/检索的目录）。如果不配置 `collections`，服务即使启动，也没有有效数据源可搜索。
+
 ### 配置区块
 
 <details>
@@ -607,6 +610,9 @@ sudo install -m 0755 qmdsr /usr/local/bin/qmdsr
 sudo mkdir -p /etc/qmdsr /var/lib/qmdsr /var/log/qmdsr
 sudo cp -n qmdsr.yaml /etc/qmdsr/qmdsr.yaml
 ```
+   - 这一步后请务必编辑 `/etc/qmdsr/qmdsr.yaml`，至少确认：
+     - `qmd.bin` 指向可执行的 qmd 路径
+     - `collections` 中每个 `path` 都是你机器上的真实目录（这决定数据来源）
 
 3. 安装 systemd unit
 ```bash
