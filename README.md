@@ -634,21 +634,48 @@ grpcurl -plaintext 127.0.0.1:19091 qmdsr.v1.QueryService/Health
 不是 systemd 的硬性要求；不写也能启动。  
 但建议显式设置（例如 `/var/lib/qmdsr`），可避免程序或其依赖读写 `~` 路径时落到不可预期目录（特别是在服务进程、定时任务和跨机器迁移场景）。
 
-### 3) 常见部署问题（qmd 模型与 collections）
+### 3) 模型安装与初始化清单（推荐按优先级）
 
-1. qmd 相关模型需要手动部署吗？
-   - `core/BM25(search)` 不依赖向量或 deep 模型，qmd 可用即可运行。
-   - `broad(vsearch)` 和 `deep(query)` 依赖 qmd 侧能力与模型资源。
-   - qmdsr 不负责安装模型；它只探测 qmd 能力并按能力启用/降级模式。
-   - 建议在上线前执行一次：
+1. Embedding 模型（必需，先完成）
+   - `vsearch` 依赖 embedding 模型；没有它，语义检索能力会退化。
+   - qmdsr 在 systemd 下的 `HOME` 已固定为 `/var/lib/qmdsr`，所以模型目录应为：
+     - `/var/lib/qmdsr/.cache/qmd/models`
+   - 先确认模型文件存在（示例）：
 ```bash
-qmd vsearch --help
-qmd query --help
-qmd status
+sudo ls -lh /var/lib/qmdsr/.cache/qmd/models
+```
+   - 建议确认至少有 embedding 模型（例如你当前环境里的 `embeddinggemma-300M-Q8_0`）。
+   - 完成模型就绪后执行一次全库嵌入：
+```bash
 qmd embed
+# 或通过 qmdsr 管理接口触发全量嵌入
+grpcurl -plaintext -d '{"force":true}' 127.0.0.1:19091 qmdsr.v1.AdminService/Embed
 ```
 
-2. collections 需要手动初始化吗？
+2. Deep Query 推理模型（可选但关键）
+   - `deep/query` 依赖推理模型；未就绪时 qmdsr 会自动降级。
+   - 你当前默认是 `allow_cpu_deep_query: false`，即使模型在本地也不会走 CPU deep。
+   - 如需开启本地 deep（CPU）：
+```yaml
+runtime:
+  low_resource_mode: true
+  allow_cpu_deep_query: true
+  smart_routing: true
+```
+```bash
+sudo systemctl restart qmdsr
+```
+   - 验证深度能力：
+```bash
+qmd query --help
+grpcurl -plaintext 127.0.0.1:19091 qmdsr.v1.QueryService/Status
+```
+
+3. qmd 模型是 qmd 侧安装，qmdsr 不代管模型下载
+   - qmdsr 只负责探测 qmd 能力并做路由/降级。
+   - 模型下载/更新请按 qmd 官方方式执行；完成后放置到 qmd 使用的模型缓存目录（即 `HOME/.cache/qmd/models`）。
+
+4. collections 需要手动初始化吗？
    - 一般不需要。qmdsr 启动时会读取 `qmdsr.yaml` 并自动执行 collection/context 对齐（不存在就创建，context 变更会更新）。
    - 只有在你希望预热或手工排障时，才需要自己跑 `qmd collection ...`。
 
