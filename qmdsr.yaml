@@ -4,6 +4,7 @@ qmd:
   mcp_port: 8181
 
 server:
+  listen: 127.0.0.1:19090
   grpc_listen: 127.0.0.1:19091
   security_model: loopback_trust
 
@@ -42,10 +43,10 @@ collections:
 
 search:
   default_mode: auto
-  coarse_k: 12
-  top_k: 6
-  min_score: 0.38
-  max_chars: 7000
+  coarse_k: 20
+  top_k: 8
+  min_score: 0.3
+  max_chars: 9000
   fallback_enabled: true
 
 cache:
@@ -74,7 +75,7 @@ logging:
 
 runtime:
   low_resource_mode: true
-  allow_cpu_deep_query: true
+  allow_cpu_deep_query: false
   smart_routing: true
   cpu_deep_min_words: 12
   cpu_deep_min_chars: 30
@@ -84,4 +85,4 @@ runtime:
   query_max_concurrency: 1
   query_timeout: 30s
   deep_fail_timeout: 12s
-  deep_negative_ttl: 15m
+  deep_negative_ttl: 60m
