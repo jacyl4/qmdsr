@@ -12,10 +12,11 @@ import (
 )
 
 type Scheduler struct {
-	cfg   *config.Config
-	exec  executor.Executor
-	cache *cache.Cache
-	log   *slog.Logger
+	cfg                 *config.Config
+	exec                executor.Executor
+	cache               *cache.Cache
+	log                 *slog.Logger
+	cleanupDeepNegative func() int
 
 	mu        sync.Mutex
 	running   map[string]bool
@@ -24,13 +25,14 @@ type Scheduler struct {
 	lastFull  time.Time
 }
 
-func New(cfg *config.Config, exec executor.Executor, c *cache.Cache, logger *slog.Logger) *Scheduler {
+func New(cfg *config.Config, exec executor.Executor, c *cache.Cache, cleanupDeepNegative func() int, logger *slog.Logger) *Scheduler {
 	return &Scheduler{
-		cfg:     cfg,
-		exec:    exec,
-		cache:   c,
-		log:     logger,
-		running: make(map[string]bool),
+		cfg:                 cfg,
+		exec:                exec,
+		cache:               c,
+		log:                 logger,
+		cleanupDeepNegative: cleanupDeepNegative,
+		running:             make(map[string]bool),
 	}
 }
 
@@ -38,7 +40,7 @@ func (s *Scheduler) Start(ctx context.Context) {
 	ctx, s.cancel = context.WithCancel(ctx)
 
 	go s.loop(ctx, "index_refresh", s.cfg.Scheduler.IndexRefresh, s.taskReindex)
-	if !s.cfg.Runtime.LowResourceMode {
+	if !s.cfg.Runtime.LowResourceMode || s.cfg.Runtime.AllowCPUVSearch || s.cfg.Runtime.AllowCPUDeepQuery {
 		go s.loop(ctx, "embed_refresh", s.cfg.Scheduler.EmbedRefresh, s.taskEmbed)
 		go s.loop(ctx, "embed_full_refresh", s.cfg.Scheduler.EmbedFullRefresh, s.taskEmbedFull)
 	} else {
@@ -67,7 +69,7 @@ func (s *Scheduler) TriggerReindex(ctx context.Context) error {
 }
 
 func (s *Scheduler) TriggerEmbed(ctx context.Context, force bool) error {
-	if s.cfg.Runtime.LowResourceMode {
+	if s.cfg.Runtime.LowResourceMode && !(s.cfg.Runtime.AllowCPUVSearch || s.cfg.Runtime.AllowCPUDeepQuery) {
 		s.log.Info("embed trigger skipped in low_resource_mode", "force", force)
 		return nil
 	}
@@ -171,6 +173,12 @@ func (s *Scheduler) taskCacheCleanup(_ context.Context) error {
 	removed := s.cache.Cleanup()
 	if removed > 0 {
 		s.log.Info("cache cleanup", "removed", removed)
+	}
+	if s.cleanupDeepNegative != nil {
+		removedDeepNeg := s.cleanupDeepNegative()
+		if removedDeepNeg > 0 {
+			s.log.Info("deep negative cache cleanup", "removed", removedDeepNeg)
+		}
 	}
 	return nil
 }

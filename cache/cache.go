@@ -2,9 +2,8 @@ package cache
 
 import (
 	"container/list"
-	"crypto/sha256"
-	"encoding/json"
-	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -153,6 +152,7 @@ func (c *Cache) Cleanup() int {
 	return removed
 }
 
+// Stats is reserved for future status/metrics endpoints.
 func (c *Cache) Stats() (size int, hits, misses int64) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -184,16 +184,16 @@ func (c *Cache) evict() {
 	delete(c.items, item.key)
 }
 
-func MakeCacheKey(query, mode, collection string, minScore float64, n int, fallback bool) string {
-	raw := struct {
-		Query      string  `json:"q"`
-		Mode       string  `json:"m"`
-		Collection string  `json:"c"`
-		MinScore   float64 `json:"s"`
-		N          int     `json:"n"`
-		Fallback   bool    `json:"f"`
-	}{query, mode, collection, minScore, n, fallback}
-	data, _ := json.Marshal(raw)
-	h := sha256.Sum256(data)
-	return fmt.Sprintf("%x", h)
+func MakeCacheKey(query, mode, collection string, minScore float64, n int, fallback bool, filesOnly bool, filesAll bool) string {
+	parts := []string{
+		strconv.Quote(query),
+		mode,
+		collection,
+		strconv.FormatFloat(minScore, 'f', 6, 64),
+		strconv.Itoa(n),
+		strconv.FormatBool(fallback),
+		strconv.FormatBool(filesOnly),
+		strconv.FormatBool(filesAll),
+	}
+	return strings.Join(parts, "|")
 }

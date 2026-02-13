@@ -53,7 +53,7 @@ func (s *Server) executeAdminEmbedCore(ctx context.Context, traceID string, forc
 		message = "full embed triggered"
 	}
 
-	if s.cfg.Runtime.LowResourceMode {
+	if s.cfg.Runtime.LowResourceMode && !(s.cfg.Runtime.AllowCPUVSearch || s.cfg.Runtime.AllowCPUDeepQuery) {
 		res := &adminOpResult{
 			Message:   "embed disabled in low_resource_mode",
 			TraceID:   traceID,

@@ -20,9 +20,11 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	QueryService_Search_FullMethodName       = "/qmdsr.v1.QueryService/Search"
+	QueryService_SearchAndGet_FullMethodName = "/qmdsr.v1.QueryService/SearchAndGet"
+	QueryService_Get_FullMethodName          = "/qmdsr.v1.QueryService/Get"
+	QueryService_MultiGet_FullMethodName     = "/qmdsr.v1.QueryService/MultiGet"
 	QueryService_Health_FullMethodName       = "/qmdsr.v1.QueryService/Health"
 	QueryService_Status_FullMethodName       = "/qmdsr.v1.QueryService/Status"
-	QueryService_SearchStream_FullMethodName = "/qmdsr.v1.QueryService/SearchStream"
 )
 
 // QueryServiceClient is the client API for QueryService service.
@@ -30,9 +32,11 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type QueryServiceClient interface {
 	Search(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchResponse, error)
+	SearchAndGet(ctx context.Context, in *SearchAndGetRequest, opts ...grpc.CallOption) (*SearchAndGetResponse, error)
+	Get(ctx context.Context, in *GetRequest, opts ...grpc.CallOption) (*GetResponse, error)
+	MultiGet(ctx context.Context, in *MultiGetRequest, opts ...grpc.CallOption) (*MultiGetResponse, error)
 	Health(ctx context.Context, in *HealthRequest, opts ...grpc.CallOption) (*HealthResponse, error)
 	Status(ctx context.Context, in *StatusRequest, opts ...grpc.CallOption) (*StatusResponse, error)
-	SearchStream(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[SearchChunk], error)
 }
 
 type queryServiceClient struct {
@@ -47,6 +51,36 @@ func (c *queryServiceClient) Search(ctx context.Context, in *SearchRequest, opts
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SearchResponse)
 	err := c.cc.Invoke(ctx, QueryService_Search_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *queryServiceClient) SearchAndGet(ctx context.Context, in *SearchAndGetRequest, opts ...grpc.CallOption) (*SearchAndGetResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SearchAndGetResponse)
+	err := c.cc.Invoke(ctx, QueryService_SearchAndGet_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *queryServiceClient) Get(ctx context.Context, in *GetRequest, opts ...grpc.CallOption) (*GetResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetResponse)
+	err := c.cc.Invoke(ctx, QueryService_Get_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *queryServiceClient) MultiGet(ctx context.Context, in *MultiGetRequest, opts ...grpc.CallOption) (*MultiGetResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MultiGetResponse)
+	err := c.cc.Invoke(ctx, QueryService_MultiGet_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -73,33 +107,16 @@ func (c *queryServiceClient) Status(ctx context.Context, in *StatusRequest, opts
 	return out, nil
 }
 
-func (c *queryServiceClient) SearchStream(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[SearchChunk], error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &QueryService_ServiceDesc.Streams[0], QueryService_SearchStream_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[SearchRequest, SearchChunk]{ClientStream: stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type QueryService_SearchStreamClient = grpc.ServerStreamingClient[SearchChunk]
-
 // QueryServiceServer is the server API for QueryService service.
 // All implementations must embed UnimplementedQueryServiceServer
 // for forward compatibility.
 type QueryServiceServer interface {
 	Search(context.Context, *SearchRequest) (*SearchResponse, error)
+	SearchAndGet(context.Context, *SearchAndGetRequest) (*SearchAndGetResponse, error)
+	Get(context.Context, *GetRequest) (*GetResponse, error)
+	MultiGet(context.Context, *MultiGetRequest) (*MultiGetResponse, error)
 	Health(context.Context, *HealthRequest) (*HealthResponse, error)
 	Status(context.Context, *StatusRequest) (*StatusResponse, error)
-	SearchStream(*SearchRequest, grpc.ServerStreamingServer[SearchChunk]) error
 	mustEmbedUnimplementedQueryServiceServer()
 }
 
@@ -113,14 +130,20 @@ type UnimplementedQueryServiceServer struct{}
 func (UnimplementedQueryServiceServer) Search(context.Context, *SearchRequest) (*SearchResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Search not implemented")
 }
+func (UnimplementedQueryServiceServer) SearchAndGet(context.Context, *SearchAndGetRequest) (*SearchAndGetResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SearchAndGet not implemented")
+}
+func (UnimplementedQueryServiceServer) Get(context.Context, *GetRequest) (*GetResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Get not implemented")
+}
+func (UnimplementedQueryServiceServer) MultiGet(context.Context, *MultiGetRequest) (*MultiGetResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method MultiGet not implemented")
+}
 func (UnimplementedQueryServiceServer) Health(context.Context, *HealthRequest) (*HealthResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Health not implemented")
 }
 func (UnimplementedQueryServiceServer) Status(context.Context, *StatusRequest) (*StatusResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Status not implemented")
-}
-func (UnimplementedQueryServiceServer) SearchStream(*SearchRequest, grpc.ServerStreamingServer[SearchChunk]) error {
-	return status.Error(codes.Unimplemented, "method SearchStream not implemented")
 }
 func (UnimplementedQueryServiceServer) mustEmbedUnimplementedQueryServiceServer() {}
 func (UnimplementedQueryServiceServer) testEmbeddedByValue()                      {}
@@ -161,6 +184,60 @@ func _QueryService_Search_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _QueryService_SearchAndGet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SearchAndGetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServiceServer).SearchAndGet(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: QueryService_SearchAndGet_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServiceServer).SearchAndGet(ctx, req.(*SearchAndGetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _QueryService_Get_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServiceServer).Get(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: QueryService_Get_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServiceServer).Get(ctx, req.(*GetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _QueryService_MultiGet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MultiGetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServiceServer).MultiGet(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: QueryService_MultiGet_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServiceServer).MultiGet(ctx, req.(*MultiGetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _QueryService_Health_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(HealthRequest)
 	if err := dec(in); err != nil {
@@ -197,17 +274,6 @@ func _QueryService_Status_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
-func _QueryService_SearchStream_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(SearchRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(QueryServiceServer).SearchStream(m, &grpc.GenericServerStream[SearchRequest, SearchChunk]{ServerStream: stream})
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type QueryService_SearchStreamServer = grpc.ServerStreamingServer[SearchChunk]
-
 // QueryService_ServiceDesc is the grpc.ServiceDesc for QueryService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -220,6 +286,18 @@ var QueryService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _QueryService_Search_Handler,
 		},
 		{
+			MethodName: "SearchAndGet",
+			Handler:    _QueryService_SearchAndGet_Handler,
+		},
+		{
+			MethodName: "Get",
+			Handler:    _QueryService_Get_Handler,
+		},
+		{
+			MethodName: "MultiGet",
+			Handler:    _QueryService_MultiGet_Handler,
+		},
+		{
 			MethodName: "Health",
 			Handler:    _QueryService_Health_Handler,
 		},
@@ -228,12 +306,6 @@ var QueryService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _QueryService_Status_Handler,
 		},
 	},
-	Streams: []grpc.StreamDesc{
-		{
-			StreamName:    "SearchStream",
-			Handler:       _QueryService_SearchStream_Handler,
-			ServerStreams: true,
-		},
-	},
+	Streams:  []grpc.StreamDesc{},
 	Metadata: "qmdsr/v1/query.proto",
 }

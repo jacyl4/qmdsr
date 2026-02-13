@@ -6,9 +6,11 @@ option go_package = "qmdsr/pb/qmdsrv1;qmdsrv1";
 
 service QueryService {
   rpc Search(SearchRequest) returns (SearchResponse);
+  rpc SearchAndGet(SearchAndGetRequest) returns (SearchAndGetResponse);
+  rpc Get(GetRequest) returns (GetResponse);
+  rpc MultiGet(MultiGetRequest) returns (MultiGetResponse);
   rpc Health(HealthRequest) returns (HealthResponse);
   rpc Status(StatusRequest) returns (StatusResponse);
-  rpc SearchStream(SearchRequest) returns (stream SearchChunk);
 }
 
 enum Mode {
@@ -35,6 +37,9 @@ message SearchRequest {
   int32 top_k = 6;
   double min_score = 7;
   bool explain = 8;
+  bool files_only = 9;
+  bool files_all = 10;
+  bool confirm = 11;
 }
 
 message Hit {
@@ -43,8 +48,7 @@ message Hit {
   string snippet = 3;
   double score = 4;
   string collection = 5;
-  int32 start_line = 6;
-  int32 end_line = 7;
+  reserved 6, 7;
 }
 
 message SearchResponse {
@@ -55,13 +59,58 @@ message SearchResponse {
   int64 latency_ms = 5;
   string trace_id = 6;
   repeated string route_log = 7;
+  string formatted_text = 8;
 }
 
-message SearchChunk {
-  oneof payload {
-    Hit hit = 1;
-    SearchResponse summary = 2;
-  }
+message GetRequest {
+  string doc_ref = 1;
+  bool full = 2;
+  bool line_numbers = 3;
+}
+
+message GetResponse {
+  string content = 1;
+  string trace_id = 2;
+  int64 latency_ms = 3;
+}
+
+message MultiGetRequest {
+  string pattern = 1;
+  int32 max_bytes = 2;
+}
+
+message DocContent {
+  string file = 1;
+  string content = 2;
+}
+
+message MultiGetResponse {
+  repeated DocContent documents = 1;
+  string trace_id = 2;
+  int64 latency_ms = 3;
+}
+
+message SearchAndGetRequest {
+  string query = 1;
+  Mode requested_mode = 2;
+  repeated string collections = 3;
+  int32 top_k = 4;
+  double min_score = 5;
+  int32 max_get_docs = 6;
+  int32 max_get_bytes = 7;
+  bool allow_fallback = 8;
+  bool confirm = 9;
+}
+
+message SearchAndGetResponse {
+  repeated Hit file_hits = 1;
+  repeated DocContent documents = 2;
+  string formatted_text = 3;
+  ServedMode served_mode = 4;
+  bool degraded = 5;
+  string degrade_reason = 6;
+  int64 latency_ms = 7;
+  string trace_id = 8;
 }
 
 message HealthRequest {}
@@ -93,4 +142,7 @@ message StatusResponse {
   int32 deep_fail_timeout_ms = 9;
   int32 deep_negative_ttl_sec = 10;
   string trace_id = 11;
+  bool cpu_overloaded = 12;
+  bool cpu_critical_overloaded = 13;
+  int32 overload_max_concurrent_search = 14;
 }

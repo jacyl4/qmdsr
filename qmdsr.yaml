@@ -4,7 +4,6 @@ qmd:
   mcp_port: 8181
 
 server:
-  listen: 127.0.0.1:19090
   grpc_listen: 127.0.0.1:19091
   security_model: loopback_trust
 
@@ -46,7 +45,8 @@ search:
   coarse_k: 20
   top_k: 8
   min_score: 0.3
-  max_chars: 9000
+  max_chars: 4500
+  files_all_max_hits: 200
   fallback_enabled: true
 
 cache:
@@ -76,7 +76,18 @@ logging:
 runtime:
   low_resource_mode: true
   allow_cpu_deep_query: false
+  allow_cpu_vsearch: true
+  cpu_overload_protect: true
+  cpu_overload_threshold: 90
+  cpu_overload_sustain: 10s
+  cpu_recover_threshold: 75
+  cpu_recover_sustain: 12s
+  cpu_critical_threshold: 95
+  cpu_critical_sustain: 5s
+  overload_max_concurrent_search: 2
+  cpu_sample_interval: 1s
   smart_routing: true
+  # The cpu_deep_* smart-routing limits below only take effect when allow_cpu_deep_query: true.
   cpu_deep_min_words: 12
   cpu_deep_min_chars: 30
   cpu_deep_max_words: 28
@@ -86,3 +97,5 @@ runtime:
   query_timeout: 30s
   deep_fail_timeout: 12s
   deep_negative_ttl: 60m
+  # Scope cooldown is only used when allow_cpu_deep_query: true.
+  deep_negative_scope_cooldown: 10m

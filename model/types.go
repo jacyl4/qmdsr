@@ -24,8 +24,16 @@ type SearchMeta struct {
 }
 
 type SearchResponse struct {
-	Results []SearchResult `json:"results"`
-	Meta    SearchMeta     `json:"meta"`
+	Results       []SearchResult `json:"results"`
+	Meta          SearchMeta     `json:"meta"`
+	FormattedText string         `json:"formatted_text,omitempty"`
+}
+
+type SearchAndGetResponse struct {
+	FileHits      []SearchResult `json:"file_hits"`
+	Documents     []Document     `json:"documents"`
+	FormattedText string         `json:"formatted_text,omitempty"`
+	Meta          SearchMeta     `json:"meta"`
 }
 
 type Document struct {
@@ -93,15 +101,4 @@ type SystemHealth struct {
 	StartedAt  time.Time                   `json:"started_at"`
 	UptimeSec  int64                       `json:"uptime_sec"`
 	Mode       string                      `json:"mode"`
-}
-
-type ErrorResponse struct {
-	Error ErrorDetail `json:"error"`
-}
-
-type ErrorDetail struct {
-	Code      string            `json:"code"`
-	Message   string            `json:"message"`
-	RequestID string            `json:"request_id"`
-	Details   map[string]string `json:"details,omitempty"`
 }

@@ -13,18 +13,18 @@ import (
 )
 
 type Guardian struct {
-	cfg    *config.Config
-	exec   executor.Executor
-	log    *slog.Logger
+	cfg  *config.Config
+	exec executor.Executor
+	log  *slog.Logger
 
-	mu            sync.RWMutex
-	health        model.HealthLevel
-	lastCheck     time.Time
-	lastHealthy   time.Time
-	failCount     int
-	restartCount  int
-	cliMode       bool
-	cancel        context.CancelFunc
+	mu           sync.RWMutex
+	health       model.HealthLevel
+	lastCheck    time.Time
+	lastHealthy  time.Time
+	failCount    int
+	restartCount int
+	cliMode      bool
+	cancel       context.CancelFunc
 }
 
 func New(cfg *config.Config, exec executor.Executor, logger *slog.Logger) *Guardian {
@@ -81,6 +81,7 @@ func (g *Guardian) Health() (model.HealthLevel, string) {
 	return g.health, msg
 }
 
+// IsCLIMode is kept for future runtime status exposure (CLI vs MCP mode).
 func (g *Guardian) IsCLIMode() bool {
 	g.mu.RLock()
 	defer g.mu.RUnlock()

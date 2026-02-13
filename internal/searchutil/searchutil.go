@@ -31,8 +31,26 @@ func DedupSortLimit(results []model.SearchResult, topK int) []model.SearchResult
 		return deduped[i].Score > deduped[j].Score
 	})
 
-	if topK > 0 && len(deduped) > topK {
-		return deduped[:topK]
+	if topK > 0 {
+		const maxPerFile = 2
+		// This limit mainly improves snippet diversity. In files_only mode qmd already
+		// returns file-level rows, so duplicates are typically absent before this stage.
+		fileCounts := make(map[string]int, len(deduped))
+		diverse := make([]model.SearchResult, 0, topK)
+		for _, r := range deduped {
+			file := strings.TrimSpace(r.File)
+			if file != "" && fileCounts[file] >= maxPerFile {
+				continue
+			}
+			if file != "" {
+				fileCounts[file]++
+			}
+			diverse = append(diverse, r)
+			if len(diverse) >= topK {
+				break
+			}
+		}
+		return diverse
 	}
 	return deduped
 }

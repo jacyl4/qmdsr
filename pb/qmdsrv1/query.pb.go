@@ -138,6 +138,9 @@ type SearchRequest struct {
 	TopK          int32                  `protobuf:"varint,6,opt,name=top_k,json=topK,proto3" json:"top_k,omitempty"`
 	MinScore      float64                `protobuf:"fixed64,7,opt,name=min_score,json=minScore,proto3" json:"min_score,omitempty"`
 	Explain       bool                   `protobuf:"varint,8,opt,name=explain,proto3" json:"explain,omitempty"`
+	FilesOnly     bool                   `protobuf:"varint,9,opt,name=files_only,json=filesOnly,proto3" json:"files_only,omitempty"`
+	FilesAll      bool                   `protobuf:"varint,10,opt,name=files_all,json=filesAll,proto3" json:"files_all,omitempty"`
+	Confirm       bool                   `protobuf:"varint,11,opt,name=confirm,proto3" json:"confirm,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -228,6 +231,27 @@ func (x *SearchRequest) GetExplain() bool {
 	return false
 }
 
+func (x *SearchRequest) GetFilesOnly() bool {
+	if x != nil {
+		return x.FilesOnly
+	}
+	return false
+}
+
+func (x *SearchRequest) GetFilesAll() bool {
+	if x != nil {
+		return x.FilesAll
+	}
+	return false
+}
+
+func (x *SearchRequest) GetConfirm() bool {
+	if x != nil {
+		return x.Confirm
+	}
+	return false
+}
+
 type Hit struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Uri           string                 `protobuf:"bytes,1,opt,name=uri,proto3" json:"uri,omitempty"`
@@ -235,8 +259,6 @@ type Hit struct {
 	Snippet       string                 `protobuf:"bytes,3,opt,name=snippet,proto3" json:"snippet,omitempty"`
 	Score         float64                `protobuf:"fixed64,4,opt,name=score,proto3" json:"score,omitempty"`
 	Collection    string                 `protobuf:"bytes,5,opt,name=collection,proto3" json:"collection,omitempty"`
-	StartLine     int32                  `protobuf:"varint,6,opt,name=start_line,json=startLine,proto3" json:"start_line,omitempty"`
-	EndLine       int32                  `protobuf:"varint,7,opt,name=end_line,json=endLine,proto3" json:"end_line,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -306,20 +328,6 @@ func (x *Hit) GetCollection() string {
 	return ""
 }
 
-func (x *Hit) GetStartLine() int32 {
-	if x != nil {
-		return x.StartLine
-	}
-	return 0
-}
-
-func (x *Hit) GetEndLine() int32 {
-	if x != nil {
-		return x.EndLine
-	}
-	return 0
-}
-
 type SearchResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Hits          []*Hit                 `protobuf:"bytes,1,rep,name=hits,proto3" json:"hits,omitempty"`
@@ -329,6 +337,7 @@ type SearchResponse struct {
 	LatencyMs     int64                  `protobuf:"varint,5,opt,name=latency_ms,json=latencyMs,proto3" json:"latency_ms,omitempty"`
 	TraceId       string                 `protobuf:"bytes,6,opt,name=trace_id,json=traceId,proto3" json:"trace_id,omitempty"`
 	RouteLog      []string               `protobuf:"bytes,7,rep,name=route_log,json=routeLog,proto3" json:"route_log,omitempty"`
+	FormattedText string                 `protobuf:"bytes,8,opt,name=formatted_text,json=formattedText,proto3" json:"formatted_text,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -412,31 +421,36 @@ func (x *SearchResponse) GetRouteLog() []string {
 	return nil
 }
 
-type SearchChunk struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// Types that are valid to be assigned to Payload:
-	//
-	//	*SearchChunk_Hit
-	//	*SearchChunk_Summary
-	Payload       isSearchChunk_Payload `protobuf_oneof:"payload"`
+func (x *SearchResponse) GetFormattedText() string {
+	if x != nil {
+		return x.FormattedText
+	}
+	return ""
+}
+
+type GetRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	DocRef        string                 `protobuf:"bytes,1,opt,name=doc_ref,json=docRef,proto3" json:"doc_ref,omitempty"`
+	Full          bool                   `protobuf:"varint,2,opt,name=full,proto3" json:"full,omitempty"`
+	LineNumbers   bool                   `protobuf:"varint,3,opt,name=line_numbers,json=lineNumbers,proto3" json:"line_numbers,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *SearchChunk) Reset() {
-	*x = SearchChunk{}
+func (x *GetRequest) Reset() {
+	*x = GetRequest{}
 	mi := &file_qmdsr_v1_query_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *SearchChunk) String() string {
+func (x *GetRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*SearchChunk) ProtoMessage() {}
+func (*GetRequest) ProtoMessage() {}
 
-func (x *SearchChunk) ProtoReflect() protoreflect.Message {
+func (x *GetRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_qmdsr_v1_query_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -448,51 +462,463 @@ func (x *SearchChunk) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use SearchChunk.ProtoReflect.Descriptor instead.
-func (*SearchChunk) Descriptor() ([]byte, []int) {
+// Deprecated: Use GetRequest.ProtoReflect.Descriptor instead.
+func (*GetRequest) Descriptor() ([]byte, []int) {
 	return file_qmdsr_v1_query_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *SearchChunk) GetPayload() isSearchChunk_Payload {
+func (x *GetRequest) GetDocRef() string {
 	if x != nil {
-		return x.Payload
+		return x.DocRef
 	}
-	return nil
+	return ""
 }
 
-func (x *SearchChunk) GetHit() *Hit {
+func (x *GetRequest) GetFull() bool {
 	if x != nil {
-		if x, ok := x.Payload.(*SearchChunk_Hit); ok {
-			return x.Hit
+		return x.Full
+	}
+	return false
+}
+
+func (x *GetRequest) GetLineNumbers() bool {
+	if x != nil {
+		return x.LineNumbers
+	}
+	return false
+}
+
+type GetResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Content       string                 `protobuf:"bytes,1,opt,name=content,proto3" json:"content,omitempty"`
+	TraceId       string                 `protobuf:"bytes,2,opt,name=trace_id,json=traceId,proto3" json:"trace_id,omitempty"`
+	LatencyMs     int64                  `protobuf:"varint,3,opt,name=latency_ms,json=latencyMs,proto3" json:"latency_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetResponse) Reset() {
+	*x = GetResponse{}
+	mi := &file_qmdsr_v1_query_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetResponse) ProtoMessage() {}
+
+func (x *GetResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_qmdsr_v1_query_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
 		}
+		return ms
 	}
-	return nil
+	return mi.MessageOf(x)
 }
 
-func (x *SearchChunk) GetSummary() *SearchResponse {
+// Deprecated: Use GetResponse.ProtoReflect.Descriptor instead.
+func (*GetResponse) Descriptor() ([]byte, []int) {
+	return file_qmdsr_v1_query_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *GetResponse) GetContent() string {
 	if x != nil {
-		if x, ok := x.Payload.(*SearchChunk_Summary); ok {
-			return x.Summary
+		return x.Content
+	}
+	return ""
+}
+
+func (x *GetResponse) GetTraceId() string {
+	if x != nil {
+		return x.TraceId
+	}
+	return ""
+}
+
+func (x *GetResponse) GetLatencyMs() int64 {
+	if x != nil {
+		return x.LatencyMs
+	}
+	return 0
+}
+
+type MultiGetRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Pattern       string                 `protobuf:"bytes,1,opt,name=pattern,proto3" json:"pattern,omitempty"`
+	MaxBytes      int32                  `protobuf:"varint,2,opt,name=max_bytes,json=maxBytes,proto3" json:"max_bytes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MultiGetRequest) Reset() {
+	*x = MultiGetRequest{}
+	mi := &file_qmdsr_v1_query_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MultiGetRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MultiGetRequest) ProtoMessage() {}
+
+func (x *MultiGetRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_qmdsr_v1_query_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
 		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MultiGetRequest.ProtoReflect.Descriptor instead.
+func (*MultiGetRequest) Descriptor() ([]byte, []int) {
+	return file_qmdsr_v1_query_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *MultiGetRequest) GetPattern() string {
+	if x != nil {
+		return x.Pattern
+	}
+	return ""
+}
+
+func (x *MultiGetRequest) GetMaxBytes() int32 {
+	if x != nil {
+		return x.MaxBytes
+	}
+	return 0
+}
+
+type DocContent struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	File          string                 `protobuf:"bytes,1,opt,name=file,proto3" json:"file,omitempty"`
+	Content       string                 `protobuf:"bytes,2,opt,name=content,proto3" json:"content,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DocContent) Reset() {
+	*x = DocContent{}
+	mi := &file_qmdsr_v1_query_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DocContent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DocContent) ProtoMessage() {}
+
+func (x *DocContent) ProtoReflect() protoreflect.Message {
+	mi := &file_qmdsr_v1_query_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DocContent.ProtoReflect.Descriptor instead.
+func (*DocContent) Descriptor() ([]byte, []int) {
+	return file_qmdsr_v1_query_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *DocContent) GetFile() string {
+	if x != nil {
+		return x.File
+	}
+	return ""
+}
+
+func (x *DocContent) GetContent() string {
+	if x != nil {
+		return x.Content
+	}
+	return ""
+}
+
+type MultiGetResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Documents     []*DocContent          `protobuf:"bytes,1,rep,name=documents,proto3" json:"documents,omitempty"`
+	TraceId       string                 `protobuf:"bytes,2,opt,name=trace_id,json=traceId,proto3" json:"trace_id,omitempty"`
+	LatencyMs     int64                  `protobuf:"varint,3,opt,name=latency_ms,json=latencyMs,proto3" json:"latency_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MultiGetResponse) Reset() {
+	*x = MultiGetResponse{}
+	mi := &file_qmdsr_v1_query_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MultiGetResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MultiGetResponse) ProtoMessage() {}
+
+func (x *MultiGetResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_qmdsr_v1_query_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MultiGetResponse.ProtoReflect.Descriptor instead.
+func (*MultiGetResponse) Descriptor() ([]byte, []int) {
+	return file_qmdsr_v1_query_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *MultiGetResponse) GetDocuments() []*DocContent {
+	if x != nil {
+		return x.Documents
 	}
 	return nil
 }
 
-type isSearchChunk_Payload interface {
-	isSearchChunk_Payload()
+func (x *MultiGetResponse) GetTraceId() string {
+	if x != nil {
+		return x.TraceId
+	}
+	return ""
 }
 
-type SearchChunk_Hit struct {
-	Hit *Hit `protobuf:"bytes,1,opt,name=hit,proto3,oneof"`
+func (x *MultiGetResponse) GetLatencyMs() int64 {
+	if x != nil {
+		return x.LatencyMs
+	}
+	return 0
 }
 
-type SearchChunk_Summary struct {
-	Summary *SearchResponse `protobuf:"bytes,2,opt,name=summary,proto3,oneof"`
+type SearchAndGetRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Query         string                 `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
+	RequestedMode Mode                   `protobuf:"varint,2,opt,name=requested_mode,json=requestedMode,proto3,enum=qmdsr.v1.Mode" json:"requested_mode,omitempty"`
+	Collections   []string               `protobuf:"bytes,3,rep,name=collections,proto3" json:"collections,omitempty"`
+	TopK          int32                  `protobuf:"varint,4,opt,name=top_k,json=topK,proto3" json:"top_k,omitempty"`
+	MinScore      float64                `protobuf:"fixed64,5,opt,name=min_score,json=minScore,proto3" json:"min_score,omitempty"`
+	MaxGetDocs    int32                  `protobuf:"varint,6,opt,name=max_get_docs,json=maxGetDocs,proto3" json:"max_get_docs,omitempty"`
+	MaxGetBytes   int32                  `protobuf:"varint,7,opt,name=max_get_bytes,json=maxGetBytes,proto3" json:"max_get_bytes,omitempty"`
+	AllowFallback bool                   `protobuf:"varint,8,opt,name=allow_fallback,json=allowFallback,proto3" json:"allow_fallback,omitempty"`
+	Confirm       bool                   `protobuf:"varint,9,opt,name=confirm,proto3" json:"confirm,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
-func (*SearchChunk_Hit) isSearchChunk_Payload() {}
+func (x *SearchAndGetRequest) Reset() {
+	*x = SearchAndGetRequest{}
+	mi := &file_qmdsr_v1_query_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
 
-func (*SearchChunk_Summary) isSearchChunk_Payload() {}
+func (x *SearchAndGetRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SearchAndGetRequest) ProtoMessage() {}
+
+func (x *SearchAndGetRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_qmdsr_v1_query_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SearchAndGetRequest.ProtoReflect.Descriptor instead.
+func (*SearchAndGetRequest) Descriptor() ([]byte, []int) {
+	return file_qmdsr_v1_query_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *SearchAndGetRequest) GetQuery() string {
+	if x != nil {
+		return x.Query
+	}
+	return ""
+}
+
+func (x *SearchAndGetRequest) GetRequestedMode() Mode {
+	if x != nil {
+		return x.RequestedMode
+	}
+	return Mode_MODE_UNSPECIFIED
+}
+
+func (x *SearchAndGetRequest) GetCollections() []string {
+	if x != nil {
+		return x.Collections
+	}
+	return nil
+}
+
+func (x *SearchAndGetRequest) GetTopK() int32 {
+	if x != nil {
+		return x.TopK
+	}
+	return 0
+}
+
+func (x *SearchAndGetRequest) GetMinScore() float64 {
+	if x != nil {
+		return x.MinScore
+	}
+	return 0
+}
+
+func (x *SearchAndGetRequest) GetMaxGetDocs() int32 {
+	if x != nil {
+		return x.MaxGetDocs
+	}
+	return 0
+}
+
+func (x *SearchAndGetRequest) GetMaxGetBytes() int32 {
+	if x != nil {
+		return x.MaxGetBytes
+	}
+	return 0
+}
+
+func (x *SearchAndGetRequest) GetAllowFallback() bool {
+	if x != nil {
+		return x.AllowFallback
+	}
+	return false
+}
+
+func (x *SearchAndGetRequest) GetConfirm() bool {
+	if x != nil {
+		return x.Confirm
+	}
+	return false
+}
+
+type SearchAndGetResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	FileHits      []*Hit                 `protobuf:"bytes,1,rep,name=file_hits,json=fileHits,proto3" json:"file_hits,omitempty"`
+	Documents     []*DocContent          `protobuf:"bytes,2,rep,name=documents,proto3" json:"documents,omitempty"`
+	FormattedText string                 `protobuf:"bytes,3,opt,name=formatted_text,json=formattedText,proto3" json:"formatted_text,omitempty"`
+	ServedMode    ServedMode             `protobuf:"varint,4,opt,name=served_mode,json=servedMode,proto3,enum=qmdsr.v1.ServedMode" json:"served_mode,omitempty"`
+	Degraded      bool                   `protobuf:"varint,5,opt,name=degraded,proto3" json:"degraded,omitempty"`
+	DegradeReason string                 `protobuf:"bytes,6,opt,name=degrade_reason,json=degradeReason,proto3" json:"degrade_reason,omitempty"`
+	LatencyMs     int64                  `protobuf:"varint,7,opt,name=latency_ms,json=latencyMs,proto3" json:"latency_ms,omitempty"`
+	TraceId       string                 `protobuf:"bytes,8,opt,name=trace_id,json=traceId,proto3" json:"trace_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SearchAndGetResponse) Reset() {
+	*x = SearchAndGetResponse{}
+	mi := &file_qmdsr_v1_query_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SearchAndGetResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SearchAndGetResponse) ProtoMessage() {}
+
+func (x *SearchAndGetResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_qmdsr_v1_query_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SearchAndGetResponse.ProtoReflect.Descriptor instead.
+func (*SearchAndGetResponse) Descriptor() ([]byte, []int) {
+	return file_qmdsr_v1_query_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *SearchAndGetResponse) GetFileHits() []*Hit {
+	if x != nil {
+		return x.FileHits
+	}
+	return nil
+}
+
+func (x *SearchAndGetResponse) GetDocuments() []*DocContent {
+	if x != nil {
+		return x.Documents
+	}
+	return nil
+}
+
+func (x *SearchAndGetResponse) GetFormattedText() string {
+	if x != nil {
+		return x.FormattedText
+	}
+	return ""
+}
+
+func (x *SearchAndGetResponse) GetServedMode() ServedMode {
+	if x != nil {
+		return x.ServedMode
+	}
+	return ServedMode_SERVED_UNSPECIFIED
+}
+
+func (x *SearchAndGetResponse) GetDegraded() bool {
+	if x != nil {
+		return x.Degraded
+	}
+	return false
+}
+
+func (x *SearchAndGetResponse) GetDegradeReason() string {
+	if x != nil {
+		return x.DegradeReason
+	}
+	return ""
+}
+
+func (x *SearchAndGetResponse) GetLatencyMs() int64 {
+	if x != nil {
+		return x.LatencyMs
+	}
+	return 0
+}
+
+func (x *SearchAndGetResponse) GetTraceId() string {
+	if x != nil {
+		return x.TraceId
+	}
+	return ""
+}
 
 type HealthRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -502,7 +928,7 @@ type HealthRequest struct {
 
 func (x *HealthRequest) Reset() {
 	*x = HealthRequest{}
-	mi := &file_qmdsr_v1_query_proto_msgTypes[4]
+	mi := &file_qmdsr_v1_query_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -514,7 +940,7 @@ func (x *HealthRequest) String() string {
 func (*HealthRequest) ProtoMessage() {}
 
 func (x *HealthRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_qmdsr_v1_query_proto_msgTypes[4]
+	mi := &file_qmdsr_v1_query_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -527,7 +953,7 @@ func (x *HealthRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthRequest.ProtoReflect.Descriptor instead.
 func (*HealthRequest) Descriptor() ([]byte, []int) {
-	return file_qmdsr_v1_query_proto_rawDescGZIP(), []int{4}
+	return file_qmdsr_v1_query_proto_rawDescGZIP(), []int{10}
 }
 
 type ComponentHealth struct {
@@ -541,7 +967,7 @@ type ComponentHealth struct {
 
 func (x *ComponentHealth) Reset() {
 	*x = ComponentHealth{}
-	mi := &file_qmdsr_v1_query_proto_msgTypes[5]
+	mi := &file_qmdsr_v1_query_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -553,7 +979,7 @@ func (x *ComponentHealth) String() string {
 func (*ComponentHealth) ProtoMessage() {}
 
 func (x *ComponentHealth) ProtoReflect() protoreflect.Message {
-	mi := &file_qmdsr_v1_query_proto_msgTypes[5]
+	mi := &file_qmdsr_v1_query_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -566,7 +992,7 @@ func (x *ComponentHealth) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ComponentHealth.ProtoReflect.Descriptor instead.
 func (*ComponentHealth) Descriptor() ([]byte, []int) {
-	return file_qmdsr_v1_query_proto_rawDescGZIP(), []int{5}
+	return file_qmdsr_v1_query_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ComponentHealth) GetName() string {
@@ -602,7 +1028,7 @@ type HealthResponse struct {
 
 func (x *HealthResponse) Reset() {
 	*x = HealthResponse{}
-	mi := &file_qmdsr_v1_query_proto_msgTypes[6]
+	mi := &file_qmdsr_v1_query_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -614,7 +1040,7 @@ func (x *HealthResponse) String() string {
 func (*HealthResponse) ProtoMessage() {}
 
 func (x *HealthResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_qmdsr_v1_query_proto_msgTypes[6]
+	mi := &file_qmdsr_v1_query_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -627,7 +1053,7 @@ func (x *HealthResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthResponse.ProtoReflect.Descriptor instead.
 func (*HealthResponse) Descriptor() ([]byte, []int) {
-	return file_qmdsr_v1_query_proto_rawDescGZIP(), []int{6}
+	return file_qmdsr_v1_query_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *HealthResponse) GetStatus() string {
@@ -666,7 +1092,7 @@ type StatusRequest struct {
 
 func (x *StatusRequest) Reset() {
 	*x = StatusRequest{}
-	mi := &file_qmdsr_v1_query_proto_msgTypes[7]
+	mi := &file_qmdsr_v1_query_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -678,7 +1104,7 @@ func (x *StatusRequest) String() string {
 func (*StatusRequest) ProtoMessage() {}
 
 func (x *StatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_qmdsr_v1_query_proto_msgTypes[7]
+	mi := &file_qmdsr_v1_query_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -691,29 +1117,32 @@ func (x *StatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatusRequest.ProtoReflect.Descriptor instead.
 func (*StatusRequest) Descriptor() ([]byte, []int) {
-	return file_qmdsr_v1_query_proto_rawDescGZIP(), []int{7}
+	return file_qmdsr_v1_query_proto_rawDescGZIP(), []int{13}
 }
 
 type StatusResponse struct {
-	state               protoimpl.MessageState `protogen:"open.v1"`
-	Version             string                 `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
-	Commit              string                 `protobuf:"bytes,2,opt,name=commit,proto3" json:"commit,omitempty"`
-	LowResourceMode     bool                   `protobuf:"varint,3,opt,name=low_resource_mode,json=lowResourceMode,proto3" json:"low_resource_mode,omitempty"`
-	AllowCpuDeepQuery   bool                   `protobuf:"varint,4,opt,name=allow_cpu_deep_query,json=allowCpuDeepQuery,proto3" json:"allow_cpu_deep_query,omitempty"`
-	DeepQueryEnabled    bool                   `protobuf:"varint,5,opt,name=deep_query_enabled,json=deepQueryEnabled,proto3" json:"deep_query_enabled,omitempty"`
-	VectorEnabled       bool                   `protobuf:"varint,6,opt,name=vector_enabled,json=vectorEnabled,proto3" json:"vector_enabled,omitempty"`
-	QueryMaxConcurrency int32                  `protobuf:"varint,7,opt,name=query_max_concurrency,json=queryMaxConcurrency,proto3" json:"query_max_concurrency,omitempty"`
-	QueryTimeoutMs      int32                  `protobuf:"varint,8,opt,name=query_timeout_ms,json=queryTimeoutMs,proto3" json:"query_timeout_ms,omitempty"`
-	DeepFailTimeoutMs   int32                  `protobuf:"varint,9,opt,name=deep_fail_timeout_ms,json=deepFailTimeoutMs,proto3" json:"deep_fail_timeout_ms,omitempty"`
-	DeepNegativeTtlSec  int32                  `protobuf:"varint,10,opt,name=deep_negative_ttl_sec,json=deepNegativeTtlSec,proto3" json:"deep_negative_ttl_sec,omitempty"`
-	TraceId             string                 `protobuf:"bytes,11,opt,name=trace_id,json=traceId,proto3" json:"trace_id,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	state                       protoimpl.MessageState `protogen:"open.v1"`
+	Version                     string                 `protobuf:"bytes,1,opt,name=version,proto3" json:"version,omitempty"`
+	Commit                      string                 `protobuf:"bytes,2,opt,name=commit,proto3" json:"commit,omitempty"`
+	LowResourceMode             bool                   `protobuf:"varint,3,opt,name=low_resource_mode,json=lowResourceMode,proto3" json:"low_resource_mode,omitempty"`
+	AllowCpuDeepQuery           bool                   `protobuf:"varint,4,opt,name=allow_cpu_deep_query,json=allowCpuDeepQuery,proto3" json:"allow_cpu_deep_query,omitempty"`
+	DeepQueryEnabled            bool                   `protobuf:"varint,5,opt,name=deep_query_enabled,json=deepQueryEnabled,proto3" json:"deep_query_enabled,omitempty"`
+	VectorEnabled               bool                   `protobuf:"varint,6,opt,name=vector_enabled,json=vectorEnabled,proto3" json:"vector_enabled,omitempty"`
+	QueryMaxConcurrency         int32                  `protobuf:"varint,7,opt,name=query_max_concurrency,json=queryMaxConcurrency,proto3" json:"query_max_concurrency,omitempty"`
+	QueryTimeoutMs              int32                  `protobuf:"varint,8,opt,name=query_timeout_ms,json=queryTimeoutMs,proto3" json:"query_timeout_ms,omitempty"`
+	DeepFailTimeoutMs           int32                  `protobuf:"varint,9,opt,name=deep_fail_timeout_ms,json=deepFailTimeoutMs,proto3" json:"deep_fail_timeout_ms,omitempty"`
+	DeepNegativeTtlSec          int32                  `protobuf:"varint,10,opt,name=deep_negative_ttl_sec,json=deepNegativeTtlSec,proto3" json:"deep_negative_ttl_sec,omitempty"`
+	TraceId                     string                 `protobuf:"bytes,11,opt,name=trace_id,json=traceId,proto3" json:"trace_id,omitempty"`
+	CpuOverloaded               bool                   `protobuf:"varint,12,opt,name=cpu_overloaded,json=cpuOverloaded,proto3" json:"cpu_overloaded,omitempty"`
+	CpuCriticalOverloaded       bool                   `protobuf:"varint,13,opt,name=cpu_critical_overloaded,json=cpuCriticalOverloaded,proto3" json:"cpu_critical_overloaded,omitempty"`
+	OverloadMaxConcurrentSearch int32                  `protobuf:"varint,14,opt,name=overload_max_concurrent_search,json=overloadMaxConcurrentSearch,proto3" json:"overload_max_concurrent_search,omitempty"`
+	unknownFields               protoimpl.UnknownFields
+	sizeCache                   protoimpl.SizeCache
 }
 
 func (x *StatusResponse) Reset() {
 	*x = StatusResponse{}
-	mi := &file_qmdsr_v1_query_proto_msgTypes[8]
+	mi := &file_qmdsr_v1_query_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -725,7 +1154,7 @@ func (x *StatusResponse) String() string {
 func (*StatusResponse) ProtoMessage() {}
 
 func (x *StatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_qmdsr_v1_query_proto_msgTypes[8]
+	mi := &file_qmdsr_v1_query_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -738,7 +1167,7 @@ func (x *StatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatusResponse.ProtoReflect.Descriptor instead.
 func (*StatusResponse) Descriptor() ([]byte, []int) {
-	return file_qmdsr_v1_query_proto_rawDescGZIP(), []int{8}
+	return file_qmdsr_v1_query_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *StatusResponse) GetVersion() string {
@@ -818,11 +1247,32 @@ func (x *StatusResponse) GetTraceId() string {
 	return ""
 }
 
+func (x *StatusResponse) GetCpuOverloaded() bool {
+	if x != nil {
+		return x.CpuOverloaded
+	}
+	return false
+}
+
+func (x *StatusResponse) GetCpuCriticalOverloaded() bool {
+	if x != nil {
+		return x.CpuCriticalOverloaded
+	}
+	return false
+}
+
+func (x *StatusResponse) GetOverloadMaxConcurrentSearch() int32 {
+	if x != nil {
+		return x.OverloadMaxConcurrentSearch
+	}
+	return 0
+}
+
 var File_qmdsr_v1_query_proto protoreflect.FileDescriptor
 
 const file_qmdsr_v1_query_proto_rawDesc = "" +
 	"\n" +
-	"\x14qmdsr/v1/query.proto\x12\bqmdsr.v1\"\x90\x02\n" +
+	"\x14qmdsr/v1/query.proto\x12\bqmdsr.v1\"\xe6\x02\n" +
 	"\rSearchRequest\x12\x14\n" +
 	"\x05query\x18\x01 \x01(\tR\x05query\x125\n" +
 	"\x0erequested_mode\x18\x02 \x01(\x0e2\x0e.qmdsr.v1.ModeR\rrequestedMode\x12 \n" +
@@ -832,7 +1282,12 @@ const file_qmdsr_v1_query_proto_rawDesc = "" +
 	"timeout_ms\x18\x05 \x01(\x05R\ttimeoutMs\x12\x13\n" +
 	"\x05top_k\x18\x06 \x01(\x05R\x04topK\x12\x1b\n" +
 	"\tmin_score\x18\a \x01(\x01R\bminScore\x12\x18\n" +
-	"\aexplain\x18\b \x01(\bR\aexplain\"\xb7\x01\n" +
+	"\aexplain\x18\b \x01(\bR\aexplain\x12\x1d\n" +
+	"\n" +
+	"files_only\x18\t \x01(\bR\tfilesOnly\x12\x1b\n" +
+	"\tfiles_all\x18\n" +
+	" \x01(\bR\bfilesAll\x12\x18\n" +
+	"\aconfirm\x18\v \x01(\bR\aconfirm\"\x89\x01\n" +
 	"\x03Hit\x12\x10\n" +
 	"\x03uri\x18\x01 \x01(\tR\x03uri\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x18\n" +
@@ -840,10 +1295,7 @@ const file_qmdsr_v1_query_proto_rawDesc = "" +
 	"\x05score\x18\x04 \x01(\x01R\x05score\x12\x1e\n" +
 	"\n" +
 	"collection\x18\x05 \x01(\tR\n" +
-	"collection\x12\x1d\n" +
-	"\n" +
-	"start_line\x18\x06 \x01(\x05R\tstartLine\x12\x19\n" +
-	"\bend_line\x18\a \x01(\x05R\aendLine\"\x84\x02\n" +
+	"collectionJ\x04\b\x06\x10\aJ\x04\b\a\x10\b\"\xab\x02\n" +
 	"\x0eSearchResponse\x12!\n" +
 	"\x04hits\x18\x01 \x03(\v2\r.qmdsr.v1.HitR\x04hits\x125\n" +
 	"\vserved_mode\x18\x02 \x01(\x0e2\x14.qmdsr.v1.ServedModeR\n" +
@@ -853,11 +1305,52 @@ const file_qmdsr_v1_query_proto_rawDesc = "" +
 	"\n" +
 	"latency_ms\x18\x05 \x01(\x03R\tlatencyMs\x12\x19\n" +
 	"\btrace_id\x18\x06 \x01(\tR\atraceId\x12\x1b\n" +
-	"\troute_log\x18\a \x03(\tR\brouteLog\"q\n" +
-	"\vSearchChunk\x12!\n" +
-	"\x03hit\x18\x01 \x01(\v2\r.qmdsr.v1.HitH\x00R\x03hit\x124\n" +
-	"\asummary\x18\x02 \x01(\v2\x18.qmdsr.v1.SearchResponseH\x00R\asummaryB\t\n" +
-	"\apayload\"\x0f\n" +
+	"\troute_log\x18\a \x03(\tR\brouteLog\x12%\n" +
+	"\x0eformatted_text\x18\b \x01(\tR\rformattedText\"\\\n" +
+	"\n" +
+	"GetRequest\x12\x17\n" +
+	"\adoc_ref\x18\x01 \x01(\tR\x06docRef\x12\x12\n" +
+	"\x04full\x18\x02 \x01(\bR\x04full\x12!\n" +
+	"\fline_numbers\x18\x03 \x01(\bR\vlineNumbers\"a\n" +
+	"\vGetResponse\x12\x18\n" +
+	"\acontent\x18\x01 \x01(\tR\acontent\x12\x19\n" +
+	"\btrace_id\x18\x02 \x01(\tR\atraceId\x12\x1d\n" +
+	"\n" +
+	"latency_ms\x18\x03 \x01(\x03R\tlatencyMs\"H\n" +
+	"\x0fMultiGetRequest\x12\x18\n" +
+	"\apattern\x18\x01 \x01(\tR\apattern\x12\x1b\n" +
+	"\tmax_bytes\x18\x02 \x01(\x05R\bmaxBytes\":\n" +
+	"\n" +
+	"DocContent\x12\x12\n" +
+	"\x04file\x18\x01 \x01(\tR\x04file\x12\x18\n" +
+	"\acontent\x18\x02 \x01(\tR\acontent\"\x80\x01\n" +
+	"\x10MultiGetResponse\x122\n" +
+	"\tdocuments\x18\x01 \x03(\v2\x14.qmdsr.v1.DocContentR\tdocuments\x12\x19\n" +
+	"\btrace_id\x18\x02 \x01(\tR\atraceId\x12\x1d\n" +
+	"\n" +
+	"latency_ms\x18\x03 \x01(\x03R\tlatencyMs\"\xbd\x02\n" +
+	"\x13SearchAndGetRequest\x12\x14\n" +
+	"\x05query\x18\x01 \x01(\tR\x05query\x125\n" +
+	"\x0erequested_mode\x18\x02 \x01(\x0e2\x0e.qmdsr.v1.ModeR\rrequestedMode\x12 \n" +
+	"\vcollections\x18\x03 \x03(\tR\vcollections\x12\x13\n" +
+	"\x05top_k\x18\x04 \x01(\x05R\x04topK\x12\x1b\n" +
+	"\tmin_score\x18\x05 \x01(\x01R\bminScore\x12 \n" +
+	"\fmax_get_docs\x18\x06 \x01(\x05R\n" +
+	"maxGetDocs\x12\"\n" +
+	"\rmax_get_bytes\x18\a \x01(\x05R\vmaxGetBytes\x12%\n" +
+	"\x0eallow_fallback\x18\b \x01(\bR\rallowFallback\x12\x18\n" +
+	"\aconfirm\x18\t \x01(\bR\aconfirm\"\xd1\x02\n" +
+	"\x14SearchAndGetResponse\x12*\n" +
+	"\tfile_hits\x18\x01 \x03(\v2\r.qmdsr.v1.HitR\bfileHits\x122\n" +
+	"\tdocuments\x18\x02 \x03(\v2\x14.qmdsr.v1.DocContentR\tdocuments\x12%\n" +
+	"\x0eformatted_text\x18\x03 \x01(\tR\rformattedText\x125\n" +
+	"\vserved_mode\x18\x04 \x01(\x0e2\x14.qmdsr.v1.ServedModeR\n" +
+	"servedMode\x12\x1a\n" +
+	"\bdegraded\x18\x05 \x01(\bR\bdegraded\x12%\n" +
+	"\x0edegrade_reason\x18\x06 \x01(\tR\rdegradeReason\x12\x1d\n" +
+	"\n" +
+	"latency_ms\x18\a \x01(\x03R\tlatencyMs\x12\x19\n" +
+	"\btrace_id\x18\b \x01(\tR\atraceId\"\x0f\n" +
 	"\rHealthRequest\"W\n" +
 	"\x0fComponentHealth\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x16\n" +
@@ -871,7 +1364,7 @@ const file_qmdsr_v1_query_proto_rawDesc = "" +
 	"\x04mode\x18\x03 \x01(\tR\x04mode\x12\x1d\n" +
 	"\n" +
 	"uptime_sec\x18\x04 \x01(\x03R\tuptimeSec\"\x0f\n" +
-	"\rStatusRequest\"\xd1\x03\n" +
+	"\rStatusRequest\"\xf5\x04\n" +
 	"\x0eStatusResponse\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12\x16\n" +
 	"\x06commit\x18\x02 \x01(\tR\x06commit\x12*\n" +
@@ -884,7 +1377,10 @@ const file_qmdsr_v1_query_proto_rawDesc = "" +
 	"\x14deep_fail_timeout_ms\x18\t \x01(\x05R\x11deepFailTimeoutMs\x121\n" +
 	"\x15deep_negative_ttl_sec\x18\n" +
 	" \x01(\x05R\x12deepNegativeTtlSec\x12\x19\n" +
-	"\btrace_id\x18\v \x01(\tR\atraceId*Y\n" +
+	"\btrace_id\x18\v \x01(\tR\atraceId\x12%\n" +
+	"\x0ecpu_overloaded\x18\f \x01(\bR\rcpuOverloaded\x126\n" +
+	"\x17cpu_critical_overloaded\x18\r \x01(\bR\x15cpuCriticalOverloaded\x12C\n" +
+	"\x1eoverload_max_concurrent_search\x18\x0e \x01(\x05R\x1boverloadMaxConcurrentSearch*Y\n" +
 	"\x04Mode\x12\x14\n" +
 	"\x10MODE_UNSPECIFIED\x10\x00\x12\r\n" +
 	"\tMODE_CORE\x10\x01\x12\x0e\n" +
@@ -897,12 +1393,14 @@ const file_qmdsr_v1_query_proto_rawDesc = "" +
 	"\x12SERVED_UNSPECIFIED\x10\x00\x12\x0f\n" +
 	"\vSERVED_CORE\x10\x01\x12\x10\n" +
 	"\fSERVED_BROAD\x10\x02\x12\x0f\n" +
-	"\vSERVED_DEEP\x10\x032\x87\x02\n" +
+	"\vSERVED_DEEP\x10\x032\x8b\x03\n" +
 	"\fQueryService\x12;\n" +
-	"\x06Search\x12\x17.qmdsr.v1.SearchRequest\x1a\x18.qmdsr.v1.SearchResponse\x12;\n" +
+	"\x06Search\x12\x17.qmdsr.v1.SearchRequest\x1a\x18.qmdsr.v1.SearchResponse\x12M\n" +
+	"\fSearchAndGet\x12\x1d.qmdsr.v1.SearchAndGetRequest\x1a\x1e.qmdsr.v1.SearchAndGetResponse\x122\n" +
+	"\x03Get\x12\x14.qmdsr.v1.GetRequest\x1a\x15.qmdsr.v1.GetResponse\x12A\n" +
+	"\bMultiGet\x12\x19.qmdsr.v1.MultiGetRequest\x1a\x1a.qmdsr.v1.MultiGetResponse\x12;\n" +
 	"\x06Health\x12\x17.qmdsr.v1.HealthRequest\x1a\x18.qmdsr.v1.HealthResponse\x12;\n" +
-	"\x06Status\x12\x17.qmdsr.v1.StatusRequest\x1a\x18.qmdsr.v1.StatusResponse\x12@\n" +
-	"\fSearchStream\x12\x17.qmdsr.v1.SearchRequest\x1a\x15.qmdsr.v1.SearchChunk0\x01B\x1aZ\x18qmdsr/pb/qmdsrv1;qmdsrv1b\x06proto3"
+	"\x06Status\x12\x17.qmdsr.v1.StatusRequest\x1a\x18.qmdsr.v1.StatusResponseB\x1aZ\x18qmdsr/pb/qmdsrv1;qmdsrv1b\x06proto3"
 
 var (
 	file_qmdsr_v1_query_proto_rawDescOnce sync.Once
@@ -917,40 +1415,53 @@ func file_qmdsr_v1_query_proto_rawDescGZIP() []byte {
 }
 
 var file_qmdsr_v1_query_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_qmdsr_v1_query_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_qmdsr_v1_query_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_qmdsr_v1_query_proto_goTypes = []any{
-	(Mode)(0),               // 0: qmdsr.v1.Mode
-	(ServedMode)(0),         // 1: qmdsr.v1.ServedMode
-	(*SearchRequest)(nil),   // 2: qmdsr.v1.SearchRequest
-	(*Hit)(nil),             // 3: qmdsr.v1.Hit
-	(*SearchResponse)(nil),  // 4: qmdsr.v1.SearchResponse
-	(*SearchChunk)(nil),     // 5: qmdsr.v1.SearchChunk
-	(*HealthRequest)(nil),   // 6: qmdsr.v1.HealthRequest
-	(*ComponentHealth)(nil), // 7: qmdsr.v1.ComponentHealth
-	(*HealthResponse)(nil),  // 8: qmdsr.v1.HealthResponse
-	(*StatusRequest)(nil),   // 9: qmdsr.v1.StatusRequest
-	(*StatusResponse)(nil),  // 10: qmdsr.v1.StatusResponse
+	(Mode)(0),                    // 0: qmdsr.v1.Mode
+	(ServedMode)(0),              // 1: qmdsr.v1.ServedMode
+	(*SearchRequest)(nil),        // 2: qmdsr.v1.SearchRequest
+	(*Hit)(nil),                  // 3: qmdsr.v1.Hit
+	(*SearchResponse)(nil),       // 4: qmdsr.v1.SearchResponse
+	(*GetRequest)(nil),           // 5: qmdsr.v1.GetRequest
+	(*GetResponse)(nil),          // 6: qmdsr.v1.GetResponse
+	(*MultiGetRequest)(nil),      // 7: qmdsr.v1.MultiGetRequest
+	(*DocContent)(nil),           // 8: qmdsr.v1.DocContent
+	(*MultiGetResponse)(nil),     // 9: qmdsr.v1.MultiGetResponse
+	(*SearchAndGetRequest)(nil),  // 10: qmdsr.v1.SearchAndGetRequest
+	(*SearchAndGetResponse)(nil), // 11: qmdsr.v1.SearchAndGetResponse
+	(*HealthRequest)(nil),        // 12: qmdsr.v1.HealthRequest
+	(*ComponentHealth)(nil),      // 13: qmdsr.v1.ComponentHealth
+	(*HealthResponse)(nil),       // 14: qmdsr.v1.HealthResponse
+	(*StatusRequest)(nil),        // 15: qmdsr.v1.StatusRequest
+	(*StatusResponse)(nil),       // 16: qmdsr.v1.StatusResponse
 }
 var file_qmdsr_v1_query_proto_depIdxs = []int32{
 	0,  // 0: qmdsr.v1.SearchRequest.requested_mode:type_name -> qmdsr.v1.Mode
 	3,  // 1: qmdsr.v1.SearchResponse.hits:type_name -> qmdsr.v1.Hit
 	1,  // 2: qmdsr.v1.SearchResponse.served_mode:type_name -> qmdsr.v1.ServedMode
-	3,  // 3: qmdsr.v1.SearchChunk.hit:type_name -> qmdsr.v1.Hit
-	4,  // 4: qmdsr.v1.SearchChunk.summary:type_name -> qmdsr.v1.SearchResponse
-	7,  // 5: qmdsr.v1.HealthResponse.components:type_name -> qmdsr.v1.ComponentHealth
-	2,  // 6: qmdsr.v1.QueryService.Search:input_type -> qmdsr.v1.SearchRequest
-	6,  // 7: qmdsr.v1.QueryService.Health:input_type -> qmdsr.v1.HealthRequest
-	9,  // 8: qmdsr.v1.QueryService.Status:input_type -> qmdsr.v1.StatusRequest
-	2,  // 9: qmdsr.v1.QueryService.SearchStream:input_type -> qmdsr.v1.SearchRequest
-	4,  // 10: qmdsr.v1.QueryService.Search:output_type -> qmdsr.v1.SearchResponse
-	8,  // 11: qmdsr.v1.QueryService.Health:output_type -> qmdsr.v1.HealthResponse
-	10, // 12: qmdsr.v1.QueryService.Status:output_type -> qmdsr.v1.StatusResponse
-	5,  // 13: qmdsr.v1.QueryService.SearchStream:output_type -> qmdsr.v1.SearchChunk
-	10, // [10:14] is the sub-list for method output_type
-	6,  // [6:10] is the sub-list for method input_type
-	6,  // [6:6] is the sub-list for extension type_name
-	6,  // [6:6] is the sub-list for extension extendee
-	0,  // [0:6] is the sub-list for field type_name
+	8,  // 3: qmdsr.v1.MultiGetResponse.documents:type_name -> qmdsr.v1.DocContent
+	0,  // 4: qmdsr.v1.SearchAndGetRequest.requested_mode:type_name -> qmdsr.v1.Mode
+	3,  // 5: qmdsr.v1.SearchAndGetResponse.file_hits:type_name -> qmdsr.v1.Hit
+	8,  // 6: qmdsr.v1.SearchAndGetResponse.documents:type_name -> qmdsr.v1.DocContent
+	1,  // 7: qmdsr.v1.SearchAndGetResponse.served_mode:type_name -> qmdsr.v1.ServedMode
+	13, // 8: qmdsr.v1.HealthResponse.components:type_name -> qmdsr.v1.ComponentHealth
+	2,  // 9: qmdsr.v1.QueryService.Search:input_type -> qmdsr.v1.SearchRequest
+	10, // 10: qmdsr.v1.QueryService.SearchAndGet:input_type -> qmdsr.v1.SearchAndGetRequest
+	5,  // 11: qmdsr.v1.QueryService.Get:input_type -> qmdsr.v1.GetRequest
+	7,  // 12: qmdsr.v1.QueryService.MultiGet:input_type -> qmdsr.v1.MultiGetRequest
+	12, // 13: qmdsr.v1.QueryService.Health:input_type -> qmdsr.v1.HealthRequest
+	15, // 14: qmdsr.v1.QueryService.Status:input_type -> qmdsr.v1.StatusRequest
+	4,  // 15: qmdsr.v1.QueryService.Search:output_type -> qmdsr.v1.SearchResponse
+	11, // 16: qmdsr.v1.QueryService.SearchAndGet:output_type -> qmdsr.v1.SearchAndGetResponse
+	6,  // 17: qmdsr.v1.QueryService.Get:output_type -> qmdsr.v1.GetResponse
+	9,  // 18: qmdsr.v1.QueryService.MultiGet:output_type -> qmdsr.v1.MultiGetResponse
+	14, // 19: qmdsr.v1.QueryService.Health:output_type -> qmdsr.v1.HealthResponse
+	16, // 20: qmdsr.v1.QueryService.Status:output_type -> qmdsr.v1.StatusResponse
+	15, // [15:21] is the sub-list for method output_type
+	9,  // [9:15] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_qmdsr_v1_query_proto_init() }
@@ -958,17 +1469,13 @@ func file_qmdsr_v1_query_proto_init() {
 	if File_qmdsr_v1_query_proto != nil {
 		return
 	}
-	file_qmdsr_v1_query_proto_msgTypes[3].OneofWrappers = []any{
-		(*SearchChunk_Hit)(nil),
-		(*SearchChunk_Summary)(nil),
-	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_qmdsr_v1_query_proto_rawDesc), len(file_qmdsr_v1_query_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   9,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

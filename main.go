@@ -47,30 +47,49 @@ func main() {
 
 	logger := setupLogger(cfg)
 
-	logger.Info("qmdsr starting",
+	startupAttrs := []any{
 		"grpc_listen", cfg.Server.GRPCListen,
 		"collections", len(cfg.Collections),
 		"low_resource_mode", cfg.Runtime.LowResourceMode,
 		"allow_cpu_deep_query", cfg.Runtime.AllowCPUDeepQuery,
+		"allow_cpu_vsearch", cfg.Runtime.AllowCPUVSearch,
 		"smart_routing", cfg.Runtime.SmartRouting,
-		"cpu_deep_min_words", cfg.Runtime.CPUDeepMinWords,
-		"cpu_deep_min_chars", cfg.Runtime.CPUDeepMinChars,
-		"cpu_deep_max_words", cfg.Runtime.CPUDeepMaxWords,
-		"cpu_deep_max_chars", cfg.Runtime.CPUDeepMaxChars,
-		"cpu_deep_max_abstract_cues", cfg.Runtime.CPUDeepMaxAbstractCues,
 		"query_max_concurrency", cfg.Runtime.QueryMaxConcurrency,
 		"query_timeout", cfg.Runtime.QueryTimeout,
 		"deep_fail_timeout", cfg.Runtime.DeepFailTimeout,
 		"deep_negative_ttl", cfg.Runtime.DeepNegativeTTL,
+		"deep_negative_scope_cooldown", cfg.Runtime.DeepNegativeScopeCooldown,
+		"cpu_overload_protect", cfg.Runtime.CPUOverloadProtect,
+		"cpu_overload_threshold", cfg.Runtime.CPUOverloadThreshold,
+		"cpu_overload_sustain", cfg.Runtime.CPUOverloadSustain,
+		"cpu_recover_threshold", cfg.Runtime.CPURecoverThreshold,
+		"cpu_recover_sustain", cfg.Runtime.CPURecoverSustain,
+		"cpu_critical_threshold", cfg.Runtime.CPUCriticalThreshold,
+		"cpu_critical_sustain", cfg.Runtime.CPUCriticalSustain,
+		"overload_max_concurrent_search", cfg.Runtime.OverloadMaxConcurrentSearch,
+		"cpu_sample_interval", cfg.Runtime.CPUSampleInterval,
 		"version", version.Version,
 		"commit", version.Commit,
 		"build_time", version.BuildTime,
-	)
+	}
+	if cfg.Runtime.AllowCPUDeepQuery {
+		startupAttrs = append(startupAttrs,
+			"cpu_deep_min_words", cfg.Runtime.CPUDeepMinWords,
+			"cpu_deep_min_chars", cfg.Runtime.CPUDeepMinChars,
+			"cpu_deep_max_words", cfg.Runtime.CPUDeepMaxWords,
+			"cpu_deep_max_chars", cfg.Runtime.CPUDeepMaxChars,
+			"cpu_deep_max_abstract_cues", cfg.Runtime.CPUDeepMaxAbstractCues,
+		)
+	}
+	logger.Info("qmdsr starting", startupAttrs...)
 
 	exec, err := executor.NewCLI(cfg, logger.With("component", "executor"))
 	if err != nil {
 		logger.Error("failed to initialize executor", "err", err)
 		os.Exit(1)
+	}
+	if !exec.HasCapability("deep_query") && !exec.HasCapability("vector") {
+		logger.Warn("both deep_query and vector are disabled; running in BM25-only mode")
 	}
 
 	c := cache.New(&cfg.Cache)
@@ -79,12 +98,13 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	orch.Start(ctx)
 
 	if err := orch.EnsureCollections(ctx); err != nil {
 		logger.Error("failed to ensure collections", "err", err)
 	}
 
-	sched := scheduler.New(cfg, exec, c, logger.With("component", "scheduler"))
+	sched := scheduler.New(cfg, exec, c, orch.CleanupDeepNegativeCache, logger.With("component", "scheduler"))
 	sched.Start(ctx)
 
 	guard := guardian.New(cfg, exec, logger.With("component", "guardian"))

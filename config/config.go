@@ -51,6 +51,7 @@ type SearchConfig struct {
 	TopK            int     `yaml:"top_k"`
 	MinScore        float64 `yaml:"min_score"`
 	MaxChars        int     `yaml:"max_chars"`
+	FilesAllMaxHits int     `yaml:"files_all_max_hits"`
 	FallbackEnabled bool    `yaml:"fallback_enabled"`
 }
 
@@ -83,18 +84,29 @@ type LoggingConfig struct {
 }
 
 type RuntimeConfig struct {
-	LowResourceMode        bool          `yaml:"low_resource_mode"`
-	AllowCPUDeepQuery      bool          `yaml:"allow_cpu_deep_query"`
-	SmartRouting           bool          `yaml:"smart_routing"`
-	CPUDeepMinWords        int           `yaml:"cpu_deep_min_words"`
-	CPUDeepMinChars        int           `yaml:"cpu_deep_min_chars"`
-	CPUDeepMaxWords        int           `yaml:"cpu_deep_max_words"`
-	CPUDeepMaxChars        int           `yaml:"cpu_deep_max_chars"`
-	CPUDeepMaxAbstractCues int           `yaml:"cpu_deep_max_abstract_cues"`
-	QueryMaxConcurrency    int           `yaml:"query_max_concurrency"`
-	QueryTimeout           time.Duration `yaml:"query_timeout"`
-	DeepFailTimeout        time.Duration `yaml:"deep_fail_timeout"`
-	DeepNegativeTTL        time.Duration `yaml:"deep_negative_ttl"`
+	LowResourceMode             bool          `yaml:"low_resource_mode"`
+	AllowCPUDeepQuery           bool          `yaml:"allow_cpu_deep_query"`
+	AllowCPUVSearch             bool          `yaml:"allow_cpu_vsearch"`
+	SmartRouting                bool          `yaml:"smart_routing"`
+	CPUDeepMinWords             int           `yaml:"cpu_deep_min_words"`
+	CPUDeepMinChars             int           `yaml:"cpu_deep_min_chars"`
+	CPUDeepMaxWords             int           `yaml:"cpu_deep_max_words"`
+	CPUDeepMaxChars             int           `yaml:"cpu_deep_max_chars"`
+	CPUDeepMaxAbstractCues      int           `yaml:"cpu_deep_max_abstract_cues"`
+	QueryMaxConcurrency         int           `yaml:"query_max_concurrency"`
+	QueryTimeout                time.Duration `yaml:"query_timeout"`
+	DeepFailTimeout             time.Duration `yaml:"deep_fail_timeout"`
+	DeepNegativeTTL             time.Duration `yaml:"deep_negative_ttl"`
+	DeepNegativeScopeCooldown   time.Duration `yaml:"deep_negative_scope_cooldown"`
+	CPUOverloadProtect          bool          `yaml:"cpu_overload_protect"`
+	CPUOverloadThreshold        int           `yaml:"cpu_overload_threshold"`
+	CPUOverloadSustain          time.Duration `yaml:"cpu_overload_sustain"`
+	CPURecoverThreshold         int           `yaml:"cpu_recover_threshold"`
+	CPURecoverSustain           time.Duration `yaml:"cpu_recover_sustain"`
+	CPUCriticalThreshold        int           `yaml:"cpu_critical_threshold"`
+	CPUCriticalSustain          time.Duration `yaml:"cpu_critical_sustain"`
+	OverloadMaxConcurrentSearch int           `yaml:"overload_max_concurrent_search"`
+	CPUSampleInterval           time.Duration `yaml:"cpu_sample_interval"`
 }
 
 func Load(path string) (*Config, error) {
@@ -150,7 +162,10 @@ func (c *Config) normalize() {
 		c.Search.MinScore = 0.3
 	}
 	if c.Search.MaxChars == 0 {
-		c.Search.MaxChars = 9000
+		c.Search.MaxChars = 4500
+	}
+	if c.Search.FilesAllMaxHits == 0 {
+		c.Search.FilesAllMaxHits = 200
 	}
 	if c.Cache.TTL == 0 {
 		c.Cache.TTL = 30 * time.Minute
@@ -206,6 +221,33 @@ func (c *Config) applyRuntimeDefaults() {
 	}
 	if deepNegativeTTLUnset {
 		c.Runtime.DeepNegativeTTL = 10 * time.Minute
+	}
+	if c.Runtime.DeepNegativeScopeCooldown <= 0 {
+		c.Runtime.DeepNegativeScopeCooldown = 10 * time.Minute
+	}
+	if c.Runtime.CPUOverloadThreshold == 0 {
+		c.Runtime.CPUOverloadThreshold = 90
+	}
+	if c.Runtime.CPUOverloadSustain == 0 {
+		c.Runtime.CPUOverloadSustain = 10 * time.Second
+	}
+	if c.Runtime.CPURecoverThreshold == 0 {
+		c.Runtime.CPURecoverThreshold = 75
+	}
+	if c.Runtime.CPURecoverSustain == 0 {
+		c.Runtime.CPURecoverSustain = 12 * time.Second
+	}
+	if c.Runtime.CPUCriticalThreshold == 0 {
+		c.Runtime.CPUCriticalThreshold = 95
+	}
+	if c.Runtime.CPUCriticalSustain == 0 {
+		c.Runtime.CPUCriticalSustain = 5 * time.Second
+	}
+	if c.Runtime.OverloadMaxConcurrentSearch == 0 {
+		c.Runtime.OverloadMaxConcurrentSearch = 2
+	}
+	if c.Runtime.CPUSampleInterval == 0 {
+		c.Runtime.CPUSampleInterval = time.Second
 	}
 
 	if c.Runtime.LowResourceMode && c.Runtime.AllowCPUDeepQuery {

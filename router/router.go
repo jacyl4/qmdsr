@@ -62,7 +62,14 @@ func DetectMode(query string, hasVector bool, hasDeepQuery bool) Mode {
 		}
 	}
 
-	if words <= 3 {
+	if hasVector && words >= 4 {
+		return ModeVSearch
+	}
+	if hasVector && !isPredominantlyASCII(query) && words >= 2 {
+		return ModeVSearch
+	}
+
+	if words <= 3 && isPredominantlyASCII(query) {
 		return ModeSearch
 	}
 

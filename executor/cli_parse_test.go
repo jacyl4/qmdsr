@@ -1,6 +1,9 @@
 package executor
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseCollectionListJSON_Array(t *testing.T) {
 	out := `[{"name":"alpha","path":"/tmp/a","mask":"**/*.md","files":12}]`
@@ -93,5 +96,73 @@ Collections
 	}
 	if st.Collections[1].Name != "beta" || st.Collections[1].Files != 67 {
 		t.Fatalf("unexpected second collection: %+v", st.Collections[1])
+	}
+}
+
+func TestParseSearchOutput_FilesCSV(t *testing.T) {
+	out := "#a86f40,0.81,qmd://claw-memory/daily/2026-02-11.md,\"OpenClaw context\""
+	results, err := parseSearchOutput(out)
+	if err != nil {
+		t.Fatalf("parseSearchOutput failed: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	got := results[0]
+	if got.DocID != "#a86f40" || got.Score != 0.81 || got.Collection != "claw-memory" {
+		t.Fatalf("unexpected files result: %+v", got)
+	}
+	if got.Title != "2026-02-11.md" {
+		t.Fatalf("unexpected title: %q", got.Title)
+	}
+}
+
+func TestParseSearchOutput_FilesCSVWithWarningLines(t *testing.T) {
+	out := strings.Join([]string{
+		"Warning: 10 docs need embeddings.",
+		"#a1,0.50,qmd://alpha/a.md,\"ctx\"",
+		"#b2,0.40,qmd://beta/b.md,\"ctx\"",
+	}, "\n")
+	results, err := parseSearchOutput(out)
+	if err != nil {
+		t.Fatalf("parseSearchOutput failed: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected 2 rows, got %d", len(results))
+	}
+	if results[0].Collection != "alpha" || results[1].Collection != "beta" {
+		t.Fatalf("unexpected collection parse: %+v", results)
+	}
+}
+
+func TestAppendSearchArgs_FilesOnly(t *testing.T) {
+	args := appendSearchArgs([]string{"search", "q", "--json"}, SearchOpts{
+		Collection: "alpha",
+		N:          3,
+		MinScore:   0.4,
+		FilesOnly:  true,
+	})
+	joined := strings.Join(args, " ")
+	if !strings.Contains(joined, "--files") {
+		t.Fatalf("expected --files in args: %v", args)
+	}
+}
+
+func TestAppendSearchArgs_FilesOnlyAllOmitsN(t *testing.T) {
+	args := appendSearchArgs([]string{"search", "q", "--json"}, SearchOpts{
+		Collection: "alpha",
+		N:          99,
+		FilesOnly:  true,
+		All:        true,
+	})
+	joined := strings.Join(args, " ")
+	if !strings.Contains(joined, "--files") {
+		t.Fatalf("expected --files in args: %v", args)
+	}
+	if !strings.Contains(joined, "--all") {
+		t.Fatalf("expected --all in args: %v", args)
+	}
+	if strings.Contains(joined, " -n ") {
+		t.Fatalf("did not expect -n when --all is enabled: %v", args)
 	}
 }

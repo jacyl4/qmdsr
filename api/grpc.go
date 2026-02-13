@@ -5,7 +5,9 @@ import (
 	"errors"
 	"net"
 	"strings"
+	"time"
 
+	"qmdsr/executor"
 	"qmdsr/model"
 	qmdsrv1 "qmdsr/pb/qmdsrv1"
 
@@ -77,6 +79,9 @@ func (g *grpcQueryServer) Search(ctx context.Context, req *qmdsrv1.SearchRequest
 		TopK:          req.GetTopK(),
 		MinScore:      req.GetMinScore(),
 		Explain:       req.GetExplain(),
+		FilesOnly:     req.GetFilesOnly(),
+		FilesAll:      req.GetFilesAll(),
+		Confirm:       req.GetConfirm(),
 		TraceID:       traceID,
 	})
 	if err != nil {
@@ -86,19 +91,80 @@ func (g *grpcQueryServer) Search(ctx context.Context, req *qmdsrv1.SearchRequest
 	return toProtoSearchResponse(result.Response, result.RouteLog), nil
 }
 
-func (g *grpcQueryServer) SearchStream(req *qmdsrv1.SearchRequest, stream grpc.ServerStreamingServer[qmdsrv1.SearchChunk]) error {
-	resp, err := g.Search(stream.Context(), req)
-	if err != nil {
-		return err
-	}
-
-	for _, hit := range resp.GetHits() {
-		if err := stream.Send(&qmdsrv1.SearchChunk{Payload: &qmdsrv1.SearchChunk_Hit{Hit: hit}}); err != nil {
-			return err
+func (g *grpcQueryServer) SearchAndGet(ctx context.Context, req *qmdsrv1.SearchAndGetRequest) (*qmdsrv1.SearchAndGetResponse, error) {
+	traceID := traceIDFromContext(ctx)
+	requested := requestedModeFromProto(req.GetRequestedMode())
+	allowFallback := req.GetAllowFallback()
+	if !allowFallback {
+		switch requested {
+		case "deep", "broad":
+			allowFallback = true
+		case "core":
+			allowFallback = false
+		default:
+			allowFallback = g.s.cfg.Search.FallbackEnabled
 		}
 	}
 
-	return stream.Send(&qmdsrv1.SearchChunk{Payload: &qmdsrv1.SearchChunk_Summary{Summary: resp}})
+	result, err := g.s.executeSearchAndGetCore(ctx, searchAndGetCoreRequest{
+		Query:         req.GetQuery(),
+		RequestedMode: requested,
+		Collections:   req.GetCollections(),
+		AllowFallback: allowFallback,
+		TopK:          req.GetTopK(),
+		MinScore:      req.GetMinScore(),
+		MaxGetDocs:    req.GetMaxGetDocs(),
+		MaxGetBytes:   req.GetMaxGetBytes(),
+		Confirm:       req.GetConfirm(),
+		TraceID:       traceID,
+	})
+	if err != nil {
+		return nil, mapSearchError(err)
+	}
+	return toProtoSearchAndGetResponse(result.Response), nil
+}
+
+func (g *grpcQueryServer) Get(ctx context.Context, req *qmdsrv1.GetRequest) (*qmdsrv1.GetResponse, error) {
+	start := time.Now()
+	traceID := traceIDFromContext(ctx)
+
+	content, err := g.s.exec.Get(ctx, req.GetDocRef(), executor.GetOpts{
+		Full:        req.GetFull(),
+		LineNumbers: req.GetLineNumbers(),
+	})
+	if err != nil {
+		return nil, mapSearchError(err)
+	}
+
+	return &qmdsrv1.GetResponse{
+		Content:   content,
+		TraceId:   traceID,
+		LatencyMs: time.Since(start).Milliseconds(),
+	}, nil
+}
+
+func (g *grpcQueryServer) MultiGet(ctx context.Context, req *qmdsrv1.MultiGetRequest) (*qmdsrv1.MultiGetResponse, error) {
+	start := time.Now()
+	traceID := traceIDFromContext(ctx)
+
+	docs, err := g.s.exec.MultiGet(ctx, req.GetPattern(), int(req.GetMaxBytes()))
+	if err != nil {
+		return nil, mapSearchError(err)
+	}
+
+	converted := make([]*qmdsrv1.DocContent, 0, len(docs))
+	for _, doc := range docs {
+		converted = append(converted, &qmdsrv1.DocContent{
+			File:    doc.File,
+			Content: doc.Content,
+		})
+	}
+
+	return &qmdsrv1.MultiGetResponse{
+		Documents: converted,
+		TraceId:   traceID,
+		LatencyMs: time.Since(start).Milliseconds(),
+	}, nil
 }
 
 func (g *grpcQueryServer) Health(ctx context.Context, _ *qmdsrv1.HealthRequest) (*qmdsrv1.HealthResponse, error) {
@@ -193,8 +259,42 @@ func allowFallbackFromProto(req *qmdsrv1.SearchRequest, requestedMode string, fa
 }
 
 func toProtoSearchResponse(resp *model.SearchResponse, routeLog []string) *qmdsrv1.SearchResponse {
-	hits := make([]*qmdsrv1.Hit, 0, len(resp.Results))
-	for _, r := range resp.Results {
+	return &qmdsrv1.SearchResponse{
+		Hits:          toProtoHits(resp.Results),
+		ServedMode:    servedModeToProto(resp.Meta.ServedMode),
+		Degraded:      resp.Meta.Degraded,
+		DegradeReason: strings.ToUpper(resp.Meta.DegradeReason),
+		LatencyMs:     resp.Meta.LatencyMs,
+		TraceId:       resp.Meta.TraceID,
+		RouteLog:      routeLog,
+		FormattedText: resp.FormattedText,
+	}
+}
+
+func toProtoSearchAndGetResponse(resp *model.SearchAndGetResponse) *qmdsrv1.SearchAndGetResponse {
+	docs := make([]*qmdsrv1.DocContent, 0, len(resp.Documents))
+	for _, d := range resp.Documents {
+		docs = append(docs, &qmdsrv1.DocContent{
+			File:    d.File,
+			Content: d.Content,
+		})
+	}
+
+	return &qmdsrv1.SearchAndGetResponse{
+		FileHits:      toProtoHits(resp.FileHits),
+		Documents:     docs,
+		FormattedText: resp.FormattedText,
+		ServedMode:    servedModeToProto(resp.Meta.ServedMode),
+		Degraded:      resp.Meta.Degraded,
+		DegradeReason: strings.ToUpper(resp.Meta.DegradeReason),
+		LatencyMs:     resp.Meta.LatencyMs,
+		TraceId:       resp.Meta.TraceID,
+	}
+}
+
+func toProtoHits(results []model.SearchResult) []*qmdsrv1.Hit {
+	hits := make([]*qmdsrv1.Hit, 0, len(results))
+	for _, r := range results {
 		hits = append(hits, &qmdsrv1.Hit{
 			Uri:        r.File,
 			Title:      r.Title,
@@ -203,16 +303,7 @@ func toProtoSearchResponse(resp *model.SearchResponse, routeLog []string) *qmdsr
 			Collection: r.Collection,
 		})
 	}
-
-	return &qmdsrv1.SearchResponse{
-		Hits:          hits,
-		ServedMode:    servedModeToProto(resp.Meta.ServedMode),
-		Degraded:      resp.Meta.Degraded,
-		DegradeReason: strings.ToUpper(resp.Meta.DegradeReason),
-		LatencyMs:     resp.Meta.LatencyMs,
-		TraceId:       resp.Meta.TraceID,
-		RouteLog:      routeLog,
-	}
+	return hits
 }
 
 func servedModeToProto(mode string) qmdsrv1.ServedMode {
@@ -237,6 +328,8 @@ func mapSearchError(err error) error {
 	lower := strings.ToLower(msg)
 
 	switch {
+	case errors.Is(err, errCriticalOverloadShed):
+		return status.Error(codes.ResourceExhausted, "RESOURCE_EXHAUSTED: "+msg)
 	case errors.Is(err, context.DeadlineExceeded) || strings.Contains(lower, "deadline exceeded"):
 		return status.Error(codes.DeadlineExceeded, "QMD_TIMEOUT: "+msg)
 	case strings.Contains(lower, "outofmemory") || strings.Contains(lower, "resource exhausted"):

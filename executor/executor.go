@@ -11,6 +11,8 @@ type SearchOpts struct {
 	N          int
 	MinScore   float64
 	Full       bool
+	FilesOnly  bool
+	All        bool
 }
 
 type GetOpts struct {

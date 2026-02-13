@@ -3,12 +3,14 @@ package executor
 import (
 	"bytes"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -21,13 +23,15 @@ import (
 const defaultTimeout = 30 * time.Second
 
 type CLIExecutor struct {
-	bin          string
-	caps         Capabilities
-	log          *slog.Logger
-	lowResource  bool
-	cpuDeep      bool
-	queryTimeout time.Duration
-	queryTokens  chan struct{}
+	bin              string
+	caps             Capabilities
+	log              *slog.Logger
+	lowResource      bool
+	cpuDeep          bool
+	cpuVSearch       bool
+	queryTimeout     time.Duration
+	queryTokens      chan struct{}
+	contextRemoveCmd string
 }
 
 func NewCLI(cfg *config.Config, logger *slog.Logger) (*CLIExecutor, error) {
@@ -36,6 +40,7 @@ func NewCLI(cfg *config.Config, logger *slog.Logger) (*CLIExecutor, error) {
 		log:          logger,
 		lowResource:  cfg.Runtime.LowResourceMode,
 		cpuDeep:      cfg.Runtime.AllowCPUDeepQuery,
+		cpuVSearch:   cfg.Runtime.AllowCPUVSearch,
 		queryTimeout: cfg.Runtime.QueryTimeout,
 	}
 	if cfg.Runtime.QueryMaxConcurrency > 0 {
@@ -75,12 +80,24 @@ func (e *CLIExecutor) probe(ctx context.Context) error {
 	if _, err := e.run(ctx, "status", "--help"); err == nil {
 		e.caps.Status = true
 	}
+	e.contextRemoveCmd = e.probeContextRemoveSubcommand(ctx)
+	if e.contextRemoveCmd != "" {
+		e.log.Info("detected qmd context remove subcommand", "subcommand", e.contextRemoveCmd)
+	}
 
 	if e.lowResource {
-		if e.caps.Vector {
-			e.log.Info("low_resource_mode enabled, disabling vector capability")
+		if e.cpuVSearch {
+			if e.caps.Vector {
+				e.log.Info("low_resource_mode enabled, vsearch kept with CPU fallback")
+			} else {
+				e.log.Warn("allow_cpu_vsearch enabled, but qmd vector capability not detected")
+			}
+		} else {
+			if e.caps.Vector {
+				e.log.Info("low_resource_mode enabled, disabling vector capability")
+			}
+			e.caps.Vector = false
 		}
-		e.caps.Vector = false
 
 		if e.cpuDeep {
 			if e.caps.DeepQuery {
@@ -140,6 +157,16 @@ func (e *CLIExecutor) Query(ctx context.Context, query string, opts SearchOpts) 
 		return nil, fmt.Errorf("query not available")
 	}
 
+	timeout := e.queryTimeout
+	if timeout <= 0 {
+		timeout = 120 * time.Second
+	}
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
+
 	if err := e.acquireQuerySlot(ctx); err != nil {
 		return nil, err
 	}
@@ -147,10 +174,6 @@ func (e *CLIExecutor) Query(ctx context.Context, query string, opts SearchOpts) 
 
 	args := []string{"query", query, "--json"}
 	args = appendSearchArgs(args, opts)
-	timeout := e.queryTimeout
-	if timeout <= 0 {
-		timeout = 120 * time.Second
-	}
 	return e.execSearch(ctx, args, timeout)
 }
 
@@ -260,8 +283,42 @@ func (e *CLIExecutor) ContextList(ctx context.Context) ([]model.PathContext, err
 func (e *CLIExecutor) ContextRemove(ctx context.Context, path string) error {
 	ctx, cancel := context.WithTimeout(ctx, defaultTimeout)
 	defer cancel()
+	if e.contextRemoveCmd != "" {
+		_, err := e.run(ctx, "context", e.contextRemoveCmd, path)
+		if err == nil {
+			return nil
+		}
+		// Fallback below in case runtime behavior differs from probe.
+	}
+	if _, err := e.run(ctx, "context", "rm", path); err == nil {
+		e.contextRemoveCmd = "rm"
+		return nil
+	}
 	_, err := e.run(ctx, "context", "remove", path)
+	if err == nil {
+		e.contextRemoveCmd = "remove"
+	}
 	return err
+}
+
+func (e *CLIExecutor) probeContextRemoveSubcommand(ctx context.Context) string {
+	out, err := e.run(ctx, "context", "--help")
+	if err != nil {
+		return ""
+	}
+	lower := strings.ToLower(out)
+	switch {
+	case strings.Contains(lower, "context rm"):
+		return "rm"
+	case strings.Contains(lower, "context remove"):
+		return "remove"
+	case strings.Contains(lower, " rm "):
+		return "rm"
+	case strings.Contains(lower, " remove "):
+		return "remove"
+	default:
+		return ""
+	}
 }
 
 func (e *CLIExecutor) Status(ctx context.Context) (*model.IndexStatus, error) {
@@ -404,12 +461,16 @@ func (e *CLIExecutor) killProcessGroup(proc *os.Process) {
 }
 
 func (e *CLIExecutor) shouldDisableVulkan(args []string) bool {
-	if !e.lowResource || !e.cpuDeep || len(args) == 0 {
+	if !e.lowResource || len(args) == 0 {
 		return false
 	}
 	switch args[0] {
-	case "query", "embed", "vsearch", "mcp":
-		return true
+	case "query":
+		return e.cpuDeep
+	case "vsearch":
+		return e.cpuVSearch
+	case "embed", "mcp":
+		return e.cpuDeep || e.cpuVSearch
 	default:
 		return false
 	}
@@ -454,14 +515,81 @@ func parseSearchOutput(out string) ([]model.SearchResult, error) {
 		}
 	}
 
+	// --files output is CSV-style text: docid,score,file,context
+	if csvResults, err := parseFilesCSVOutput(trimmed); err == nil {
+		return csvResults, nil
+	}
+
 	return nil, fmt.Errorf("invalid search output")
+}
+
+func parseFilesCSVOutput(out string) ([]model.SearchResult, error) {
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	results := make([]model.SearchResult, 0, len(lines))
+	parsedRows := 0
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if !strings.Contains(line, ",") {
+			continue
+		}
+		rec, err := csv.NewReader(strings.NewReader(line)).Read()
+		if err != nil {
+			return nil, err
+		}
+		if len(rec) < 3 {
+			return nil, fmt.Errorf("invalid files row")
+		}
+
+		score, err := strconv.ParseFloat(strings.TrimSpace(rec[1]), 64)
+		if err != nil {
+			return nil, err
+		}
+		file := strings.TrimSpace(rec[2])
+		r := model.SearchResult{
+			DocID:      rec[0],
+			Score:      score,
+			File:       file,
+			Title:      filepath.Base(file),
+			Collection: extractCollectionFromURI(file),
+		}
+		results = append(results, r)
+		parsedRows++
+	}
+	if parsedRows == 0 {
+		return nil, fmt.Errorf("no files rows")
+	}
+	return results, nil
+}
+
+func extractCollectionFromURI(uri string) string {
+	const prefix = "qmd://"
+	if !strings.HasPrefix(uri, prefix) {
+		return ""
+	}
+	rest := strings.TrimPrefix(uri, prefix)
+	if rest == "" {
+		return ""
+	}
+	if idx := strings.Index(rest, "/"); idx > 0 {
+		return rest[:idx]
+	}
+	return rest
 }
 
 func appendSearchArgs(args []string, opts SearchOpts) []string {
 	if opts.Collection != "" {
 		args = append(args, "--collection", opts.Collection)
 	}
-	if opts.N > 0 {
+	if opts.FilesOnly {
+		args = append(args, "--files")
+		if opts.All {
+			args = append(args, "--all")
+		}
+	}
+	if opts.N > 0 && !opts.All {
 		args = append(args, "-n", strconv.Itoa(opts.N))
 	}
 	if opts.MinScore > 0 {
