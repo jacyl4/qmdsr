@@ -5,12 +5,12 @@ After=network.target
 [Service]
 Type=simple
 ExecStart=/usr/local/bin/qmdsr -config /etc/qmdsr/qmdsr.yaml
-User=jacyl4
-Group=jacyl4
 Restart=always
 RestartSec=5
 OOMPolicy=continue
-Environment=HOME=/home/jacyl4
+Environment=HOME=/var/lib/qmdsr
+WorkingDirectory=/var/lib/qmdsr
+StateDirectory=qmdsr
 RuntimeDirectory=qmdsr
 LogsDirectory=qmdsr
 WatchdogSec=120

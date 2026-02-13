@@ -554,6 +554,28 @@ scope cooldown 仅在 `allow_cpu_deep_query: true` 时激活。
 
 ## 构建与部署
 
+### 0) 先部署 qmd（qmdsr 的前置依赖）
+
+qmdsr 通过 CLI 调用 qmd，因此必须先安装并确认 qmd 可用。
+
+```bash
+# 安装 qmd（你给的方式）
+bun install -g https://github.com/tobi/qmd
+
+# 验证
+qmd --version || qmd --help
+command -v qmd
+```
+
+建议把 `qmd` 放在稳定路径（例如 `/usr/local/bin/qmd`），并在 `qmdsr.yaml` 中配置：
+
+```yaml
+qmd:
+  bin: /usr/local/bin/qmd
+```
+
+### 1) 部署 qmdsr 二进制
+
 ```bash
 # 构建
 make build
@@ -572,6 +594,63 @@ sudo systemctl start qmdsr
 sudo systemctl status qmdsr
 sudo journalctl -u qmdsr -f
 ```
+
+### 2) 手动部署（详细，二进制 + 配置 + systemd）
+
+1. 安装二进制
+```bash
+sudo install -m 0755 qmdsr /usr/local/bin/qmdsr
+```
+
+2. 准备配置目录与数据目录
+```bash
+sudo mkdir -p /etc/qmdsr /var/lib/qmdsr /var/log/qmdsr
+sudo cp -n qmdsr.yaml /etc/qmdsr/qmdsr.yaml
+```
+
+3. 安装 systemd unit
+```bash
+sudo install -m 0644 deploy/qmdsr.service /etc/systemd/system/qmdsr.service
+sudo systemctl daemon-reload
+sudo systemctl enable qmdsr
+```
+
+4. 启动并验证
+```bash
+sudo systemctl restart qmdsr
+sudo systemctl status qmdsr --no-pager
+sudo journalctl -u qmdsr -f
+```
+
+5. gRPC 健康检查（可选）
+```bash
+grpcurl -plaintext 127.0.0.1:19091 qmdsr.v1.QueryService/Health
+```
+
+当前 `deploy/qmdsr.service` 默认使用 **root** 运行，配置文件路径固定为 `/etc/qmdsr/qmdsr.yaml`，工作目录与 HOME 使用通用路径 `/var/lib/qmdsr`。
+
+### 关于 `Environment=HOME=...` 是否必须
+
+不是 systemd 的硬性要求；不写也能启动。  
+但建议显式设置（例如 `/var/lib/qmdsr`），可避免程序或其依赖读写 `~` 路径时落到不可预期目录（特别是在服务进程、定时任务和跨机器迁移场景）。
+
+### 3) 常见部署问题（qmd 模型与 collections）
+
+1. qmd 相关模型需要手动部署吗？
+   - `core/BM25(search)` 不依赖向量或 deep 模型，qmd 可用即可运行。
+   - `broad(vsearch)` 和 `deep(query)` 依赖 qmd 侧能力与模型资源。
+   - qmdsr 不负责安装模型；它只探测 qmd 能力并按能力启用/降级模式。
+   - 建议在上线前执行一次：
+```bash
+qmd vsearch --help
+qmd query --help
+qmd status
+qmd embed
+```
+
+2. collections 需要手动初始化吗？
+   - 一般不需要。qmdsr 启动时会读取 `qmdsr.yaml` 并自动执行 collection/context 对齐（不存在就创建，context 变更会更新）。
+   - 只有在你希望预热或手工排障时，才需要自己跑 `qmd collection ...`。
 
 ### proto 生成
 

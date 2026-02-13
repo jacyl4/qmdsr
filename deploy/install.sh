@@ -12,7 +12,7 @@ sudo cp qmdsr /usr/local/bin/qmdsr
 sudo chmod 755 /usr/local/bin/qmdsr
 
 echo "=== Installing config ==="
-sudo mkdir -p /etc/qmdsr /var/log/qmdsr
+sudo mkdir -p /etc/qmdsr /var/log/qmdsr /var/lib/qmdsr
 if [ ! -f /etc/qmdsr/qmdsr.yaml ]; then
     sudo cp qmdsr.yaml /etc/qmdsr/qmdsr.yaml
     echo "Config installed to /etc/qmdsr/qmdsr.yaml"
