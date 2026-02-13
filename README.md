@@ -627,4 +627,4 @@ grpcurl -plaintext -d '{"force":true}' \
 
 ## 许可证
 
-私有项目。
+本项目基于 MIT License 开源，详见 `LICENSE`。

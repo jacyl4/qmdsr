@@ -1,0 +1,46 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build with tag version
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          make build VERSION="${VERSION}"
+
+      - name: Package artifacts
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          mkdir -p dist
+          cp qmdsr dist/qmdsr-linux-amd64
+          tar -C dist -czf "dist/qmdsr-${VERSION}-linux-amd64.tar.gz" qmdsr-linux-amd64
+          sha256sum "dist/qmdsr-${VERSION}-linux-amd64.tar.gz" > "dist/qmdsr-${VERSION}-linux-amd64.tar.gz.sha256"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            dist/qmdsr-${{ github.ref_name }}-linux-amd64.tar.gz
+            dist/qmdsr-${{ github.ref_name }}-linux-amd64.tar.gz.sha256
